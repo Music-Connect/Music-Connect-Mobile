@@ -31,17 +31,12 @@ interface FeedProposal {
   publico_esperado?: number;
 }
 
-interface User {
-  id_usuario?: string;
-  usuario?: string;
-  email?: string;
-  tipo?: string;
-}
+import { Usuario } from "@/services/api";
 
 export default function FeedScreen() {
   const router = useRouter();
   const [proposals, setProposals] = useState<FeedProposal[]>([]);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -60,7 +55,7 @@ export default function FeedScreen() {
     "Formatura",
   ];
 
-  const isArtist = user?.tipo === "artista";
+  const isArtist = user?.tipo_usuario === "artista";
 
   useFocusEffect(
     React.useCallback(() => {
@@ -77,7 +72,7 @@ export default function FeedScreen() {
           setLoading(true);
 
           const [userRes, feedRes] = await Promise.all([
-            api.getCurrentUser(),
+            api.getMe(),
             api.listarRecomendacoes({
               local: searchLocal || undefined,
               tipo_evento: selectedTipoEvento || undefined,
@@ -86,13 +81,13 @@ export default function FeedScreen() {
             }),
           ]);
 
-          if (userRes.success && userRes.data?.user) {
-            setUser(userRes.data.user as User);
+          if (userRes) {
+            setUser(userRes);
           }
 
-          if (feedRes.success && feedRes.data?.propostas) {
-            setProposals(feedRes.data.propostas as unknown as FeedProposal[]);
-            setHasMore(feedRes.data.hasMore || false);
+          if (feedRes.propostas.length >= 0) {
+            setProposals(feedRes.propostas as unknown as FeedProposal[]);
+            setHasMore(feedRes.hasMore || false);
           }
         } catch (error) {
           console.error("Erro ao carregar feed:", error);
@@ -121,7 +116,7 @@ export default function FeedScreen() {
       setLoading(true);
 
       const [userRes, feedRes] = await Promise.all([
-        api.getCurrentUser(),
+        api.getMe(),
         api.listarRecomendacoes({
           local: searchLocal || undefined,
           tipo_evento: selectedTipoEvento || undefined,
@@ -130,13 +125,13 @@ export default function FeedScreen() {
         }),
       ]);
 
-      if (userRes.success && userRes.data?.user) {
-        setUser(userRes.data.user as User);
+      if (userRes) {
+        setUser(userRes);
       }
 
-      if (feedRes.success && feedRes.data?.propostas) {
-        setProposals(feedRes.data.propostas as unknown as FeedProposal[]);
-        setHasMore(feedRes.data.hasMore || false);
+      if (feedRes.propostas.length >= 0) {
+        setProposals(feedRes.propostas as unknown as FeedProposal[]);
+        setHasMore(feedRes.hasMore || false);
       }
     } catch (error) {
       console.error("Erro ao carregar feed:", error);
@@ -165,12 +160,12 @@ export default function FeedScreen() {
         offset: proposals.length,
       });
 
-      if (feedRes.success && feedRes.data?.propostas) {
+      if (feedRes.propostas.length >= 0) {
         setProposals([
           ...proposals,
-          ...(feedRes.data.propostas as unknown as FeedProposal[]),
+          ...(feedRes.propostas as unknown as FeedProposal[]),
         ]);
-        setHasMore(feedRes.data.hasMore || false);
+        setHasMore(feedRes.hasMore || false);
       }
     } catch (error) {
       console.error("Erro ao carregar mais propostas:", error);
@@ -204,7 +199,7 @@ export default function FeedScreen() {
       {/* Welcome Section */}
       <View style={styles.welcomeSection}>
         <Text style={styles.greetingText}>
-          👋 Olá, {user?.usuario || "Usuário"}!
+          👋 Olá, {user?.name || "Usuário"}!
         </Text>
         <Text style={styles.welcomeTitle}>
           {isArtist

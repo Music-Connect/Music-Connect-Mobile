@@ -17,7 +17,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [formLogin, setFormLogin] = useState({
     email: "",
-    senha: "",
+    password: "",
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -26,28 +26,21 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (!formLogin.email || !formLogin.senha) {
+    if (!formLogin.email || !formLogin.password) {
       Alert.alert("Erro", "Por favor, preencha todos os campos");
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await api.login({
+      await api.login({
         email: formLogin.email,
-        senha: formLogin.senha,
+        password: formLogin.password,
       });
 
-      if (response.success && response.data?.user) {
-        Alert.alert("Sucesso", "Login realizado com sucesso!", [
-          {
-            text: "OK",
-            onPress: () => router.replace("/redirect"),
-          },
-        ]);
-      } else {
-        Alert.alert("Erro", response.error || "Erro ao fazer login");
-      }
+      Alert.alert("Sucesso", "Login realizado com sucesso!", [
+        { text: "OK", onPress: () => router.replace("/redirect") },
+      ]);
     } catch (error) {
       Alert.alert(
         "Erro",
@@ -106,8 +99,8 @@ export default function LoginScreen() {
               style={styles.input}
               placeholder="••••••••"
               placeholderTextColor="#666"
-              value={formLogin.senha}
-              onChangeText={(text) => handleChange("senha", text)}
+              value={formLogin.password}
+              onChangeText={(text) => handleChange("password", text)}
               secureTextEntry
             />
           </View>

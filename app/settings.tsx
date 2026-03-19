@@ -21,6 +21,7 @@ export default function SettingsScreen() {
   const isTablet = width >= 768;
   const [activeTab, setActiveTab] = useState<TabType>("account");
   const [initializing, setInitializing] = useState(true);
+  const [userId, setUserId] = useState<string>("");
   const [form, setForm] = useState({
     nome: "",
     email: "",
@@ -37,9 +38,10 @@ export default function SettingsScreen() {
   const loadUserData = async () => {
     try {
       setInitializing(true);
-      const response = await api.getCurrentUser();
-      if (response.success && response.data?.user) {
-        const user = response.data.user as any;
+      const response = await api.getMe();
+      if (response) {
+        const user = response as any;
+        setUserId(user.id || "");
         setForm({
           nome: user.nome || "",
           email: user.email || "",
@@ -59,11 +61,9 @@ export default function SettingsScreen() {
 
   const handleUpdate = async () => {
     try {
-      const response = await api.updateProfile(form);
-      if (response.success) {
+      const response = await api.updateProfile(userId, form as any);
+      if (response) {
         Alert.alert("Sucesso", "Configurações salvas com sucesso!");
-      } else {
-        Alert.alert("Erro", response.error || "Falha ao salvar");
       }
     } catch (error) {
       Alert.alert("Erro", "Falha ao salvar configurações");

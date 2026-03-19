@@ -19,6 +19,7 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [userId, setUserId] = useState<string>("");
   const { form, handleChange, setForm } = useFormState({
     nome: "",
     email: "",
@@ -37,9 +38,10 @@ export default function EditProfileScreen() {
   const loadUserData = async () => {
     try {
       setInitializing(true);
-      const response = await api.getCurrentUser();
-      if (response.success && response.data?.user) {
-        const user = response.data.user as any;
+      const response = await api.getMe();
+      if (response) {
+        const user = response as any;
+        setUserId(user.id || "");
         setForm({
           nome: user.nome || "",
           email: user.email || "",
@@ -67,21 +69,19 @@ export default function EditProfileScreen() {
 
     setLoading(true);
     try {
-      const response = await api.updateProfile({
-        nome: form.nome,
+      const response = await api.updateProfile(userId, {
+        name: form.nome,
         email: form.email,
         telefone: form.telefone,
       } as any);
 
-      if (response.success) {
+      if (response) {
         Alert.alert("Sucesso", "Perfil atualizado com sucesso!", [
           {
             text: "OK",
             onPress: () => router.back(),
           },
         ]);
-      } else {
-        Alert.alert("Erro", response.error || "Falha ao atualizar perfil");
       }
     } catch {
       Alert.alert("Erro", "Falha ao atualizar perfil");

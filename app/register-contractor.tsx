@@ -16,9 +16,9 @@ import api from "../services/api";
 export default function RegisterContractorScreen() {
   const router = useRouter();
   const [form, setForm] = useState({
-    nome: "",
+    name: "",
     email: "",
-    senha: "",
+    password: "",
     confirmarSenha: "",
     telefone: "",
     tipo: "contratante" as const,
@@ -30,41 +30,34 @@ export default function RegisterContractorScreen() {
   };
 
   const handleRegister = async () => {
-    if (!form.nome || !form.email || !form.senha) {
+    if (!form.name || !form.email || !form.password) {
       Alert.alert("Erro", "Por favor, preencha todos os campos obrigatórios");
       return;
     }
 
-    if (form.senha !== form.confirmarSenha) {
+    if (form.password !== form.confirmarSenha) {
       Alert.alert("Erro", "As senhas não coincidem");
       return;
     }
 
-    if (form.senha.length < 6) {
+    if (form.password.length < 6) {
       Alert.alert("Erro", "A senha deve ter no mínimo 6 caracteres");
       return;
     }
 
     setIsLoading(true);
     try {
-      const response = await api.registerContratante({
-        nome: form.nome,
+      await api.register({
+        name: form.name,
         email: form.email,
-        senha: form.senha,
-        tipo: "contratante",
-        telefone: form.telefone,
+        password: form.password,
+        tipo_usuario: "contratante",
+        telefone: form.telefone || undefined,
       });
 
-      if (response.success && response.data?.user) {
-        Alert.alert("Sucesso", "Conta criada com sucesso!", [
-          {
-            text: "OK",
-            onPress: () => router.replace("/redirect"),
-          },
-        ]);
-      } else {
-        Alert.alert("Erro", response.error || "Erro ao registrar");
-      }
+      Alert.alert("Sucesso", "Conta criada com sucesso!", [
+        { text: "OK", onPress: () => router.replace("/redirect") },
+      ]);
     } catch (error) {
       Alert.alert(
         "Erro",
@@ -111,8 +104,8 @@ export default function RegisterContractorScreen() {
               style={styles.input}
               placeholder="Seu nome"
               placeholderTextColor="#666"
-              value={form.nome}
-              onChangeText={(text) => handleChange("nome", text)}
+              value={form.name}
+              onChangeText={(text) => handleChange("name", text)}
             />
           </View>
 
@@ -139,8 +132,8 @@ export default function RegisterContractorScreen() {
               style={styles.input}
               placeholder="Mínimo 6 caracteres"
               placeholderTextColor="#666"
-              value={form.senha}
-              onChangeText={(text) => handleChange("senha", text)}
+              value={form.password}
+              onChangeText={(text) => handleChange("password", text)}
               secureTextEntry
             />
           </View>

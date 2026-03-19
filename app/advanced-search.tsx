@@ -49,13 +49,13 @@ export default function AdvancedSearchScreen() {
     setLoading(true);
     try {
       const response = await api.listarArtistas();
-      if (response.success && response.data?.artistas) {
-        let filtered = response.data.artistas;
+      if (response.artistas) {
+        let filtered = response.artistas;
 
         // Filter by search
         if (filters.search) {
           filtered = filtered.filter((a: any) =>
-            a.usuario?.toLowerCase().includes(filters.search.toLowerCase()),
+            a.name?.toLowerCase().includes(filters.search.toLowerCase()),
           );
         }
 
@@ -93,9 +93,9 @@ export default function AdvancedSearchScreen() {
     setResults([]);
   };
 
-  const renderArtist = ({ item }: { item: (typeof mockArtists)[0] }) => (
+  const renderArtist = ({ item }: { item: any }) => (
     <TouchableOpacity
-      onPress={() => router.push(`/artist/${item.id_usuario}`)}
+      onPress={() => router.push(`/artist/${item.id}`)}
       style={styles.artistCard}
     >
       <View style={styles.artistHeader}>
@@ -103,7 +103,7 @@ export default function AdvancedSearchScreen() {
           <Text style={styles.avatarIcon}>🎤</Text>
         </View>
         <View style={styles.artistInfo}>
-          <Text style={styles.artistName}>{item.usuario}</Text>
+          <Text style={styles.artistName}>{item.name}</Text>
           <Text style={styles.artistType}>{item.tipo_usuario}</Text>
         </View>
         <Badge label="Contratar" variant="info" />
@@ -218,14 +218,14 @@ export default function AdvancedSearchScreen() {
           </Text>
 
           {loading ? (
-            <View style={styles.loadingContainer}>
+            <View style={styles.locationContainer}>
               <ActivityIndicator size="large" color="#FF6B35" />
             </View>
           ) : results.length > 0 ? (
             <FlatList
               data={results}
               renderItem={renderArtist}
-              keyExtractor={(item) => item.id_usuario.toString()}
+              keyExtractor={(item) => item.id.toString()}
               scrollEnabled={false}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
             />

@@ -31,15 +31,15 @@ export default function ContractorProfileScreen() {
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const response = await api.getCurrentUser();
-      if (response.success && response.data?.user) {
-        const userData = response.data.user;
+      const response = await api.getMe();
+      if (response) {
+        const userData = response;
         setUser(userData);
 
         // Load stats for contractor
-        const propostasRes = await api.listarMinhasPropostas();
+        const propostasRes = await api.getPropostasRecebidas();
         setStats({
-          propostas: propostasRes.data?.propostas?.length || 0,
+          propostas: propostasRes.length || 0,
           avaliacoes: 0,
           mediaAvaliacoes: 0,
         });
@@ -108,7 +108,7 @@ export default function ContractorProfileScreen() {
             <View style={styles.avatarWrapper}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {user.usuario.substring(0, 1).toUpperCase()}
+                  {user.name.substring(0, 1).toUpperCase()}
                 </Text>
               </View>
               <TouchableOpacity
@@ -120,7 +120,7 @@ export default function ContractorProfileScreen() {
             </View>
           </View>
 
-          <Text style={styles.userName}>{user.usuario}</Text>
+          <Text style={styles.userName}>{user.name}</Text>
           <View style={styles.badgeContainer}>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>🎯 Contratante</Text>

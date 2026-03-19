@@ -32,10 +32,10 @@ export default function ProposalsSentScreen() {
   const loadProposals = async () => {
     try {
       setLoading(true);
-      const response = await api.listarMinhasPropostas();
-      if (response.success && response.data?.propostas) {
+      const response = await api.getPropostasRecebidas();
+      if (response) {
         // Filter only sent proposals (id_contratante is current user)
-        const sentProposals = response.data.propostas.filter(
+        const sentProposals = response.filter(
           (p: any) => p.tipo_proposta === "enviada",
         );
         setProposals(sentProposals);

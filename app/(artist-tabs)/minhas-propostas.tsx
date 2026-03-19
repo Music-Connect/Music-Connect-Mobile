@@ -11,8 +11,10 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import api from "@/services/api";
 
+import { Usuario } from "@/services/api";
+
 interface Proposal {
-  id_proposta: string;
+  id_proposta: number;
   titulo?: string;
   descricao?: string;
   valor_oferecido?: number;
@@ -27,17 +29,10 @@ interface Proposal {
   tipo_proposta?: "recebida" | "enviada";
 }
 
-interface User {
-  id_usuario?: string;
-  usuario?: string;
-  email?: string;
-  tipo_usuario?: string;
-}
-
 export default function ArtistMinhasPropostasScreen() {
   const router = useRouter();
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
@@ -52,16 +47,16 @@ export default function ArtistMinhasPropostasScreen() {
       setLoading(true);
 
       const [userRes, proposalsRes] = await Promise.all([
-        api.getCurrentUser(),
-        api.listarMinhasPropostas(),
+        api.getMe(),
+        api.getPropostasRecebidas(),
       ]);
 
-      if (userRes.success && userRes.data?.user) {
-        setUser(userRes.data.user as User);
+      if (userRes) {
+        setUser(userRes);
       }
 
-      if (proposalsRes.success && proposalsRes.data?.propostas) {
-        setProposals(proposalsRes.data.propostas);
+      if (proposalsRes.length >= 0) {
+        setProposals(proposalsRes as unknown as Proposal[]);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -87,16 +82,16 @@ export default function ArtistMinhasPropostasScreen() {
           setLoading(true);
 
           const [userRes, proposalsRes] = await Promise.all([
-            api.getCurrentUser(),
-            api.listarMinhasPropostas(),
+            api.getMe(),
+            api.getPropostasRecebidas(),
           ]);
 
-          if (userRes.success && userRes.data?.user) {
-            setUser(userRes.data.user as User);
+          if (userRes) {
+            setUser(userRes);
           }
 
-          if (proposalsRes.success && proposalsRes.data?.propostas) {
-            setProposals(proposalsRes.data.propostas);
+          if (proposalsRes.length >= 0) {
+            setProposals(proposalsRes as unknown as Proposal[]);
           }
         } catch (error) {
           console.error("Erro ao carregar dados:", error);
@@ -138,23 +133,19 @@ export default function ArtistMinhasPropostasScreen() {
     }
   };
 
-  const handleAcceptProposal = async (id: string) => {
+  const handleAcceptProposal = async (id: number) => {
     try {
-      const result = await api.responderProposta(id, "aceita");
-      if (result.success) {
-        loadData();
-      }
+      await api.atualizarStatusProposta(id, "aceita");
+      loadData();
     } catch (error) {
       console.error("Erro ao aceitar proposta:", error);
     }
   };
 
-  const handleRejectProposal = async (id: string) => {
+  const handleRejectProposal = async (id: number) => {
     try {
-      const result = await api.responderProposta(id, "rejeitada");
-      if (result.success) {
-        loadData();
-      }
+      await api.atualizarStatusProposta(id, "recusada");
+      loadData();
     } catch (error) {
       console.error("Erro ao rejeitar proposta:", error);
     }
@@ -256,7 +247,7 @@ export default function ArtistMinhasPropostasScreen() {
           <View style={styles.bannerHeader}>
             <View>
               <Text style={styles.welcomeText}>Minhas Propostas</Text>
-              <Text style={styles.userName}>{user?.usuario || "Artista"}</Text>
+              <Text style={styles.userName}>{user?.name || "Artista"}</Text>
             </View>
             <View style={styles.statusBadgeActive}>
               <Text style={styles.statusBadgeActiveText}>ATIVO</Text>

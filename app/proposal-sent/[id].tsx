@@ -31,10 +31,10 @@ export default function ProposalSentDetailScreen() {
   const loadProposal = async () => {
     try {
       setLoading(true);
-      const response = await api.listarMinhasPropostas();
-      if (response.success && response.data?.propostas) {
-        const found = response.data.propostas.find(
-          (p: any) => p.id_proposta === id,
+      const response = await api.getPropostasRecebidas();
+      if (response) {
+        const found = response.find(
+          (p: any) => p.id_proposta.toString() === id?.toString(),
         );
         if (found) {
           setProposal(found);
@@ -52,7 +52,7 @@ export default function ProposalSentDetailScreen() {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
-        <View style={styles.loadingContainer}>
+        <View style={styles.errorContainer}>
           <ActivityIndicator size="large" color="#FF6B35" />
         </View>
       </View>
@@ -80,7 +80,7 @@ export default function ProposalSentDetailScreen() {
     (proposal?.status as ProposalStatus) || "pendente",
   );
 
-  if (!proposal || !artist) {
+  if (!proposal) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -99,9 +99,9 @@ export default function ProposalSentDetailScreen() {
 
   const getStatusColor = (status: ProposalStatus) => {
     switch (status) {
-      case "aceito":
+      case "aceita":
         return "#10B981";
-      case "recusado":
+      case "recusada":
         return "#EF4444";
       case "pendente":
       default:
@@ -111,10 +111,10 @@ export default function ProposalSentDetailScreen() {
 
   const getStatusLabel = (status: ProposalStatus) => {
     switch (status) {
-      case "aceito":
-        return "Aceito";
-      case "recusado":
-        return "Recusado";
+      case "aceita":
+        return "Aceita";
+      case "recusada":
+        return "Recusada";
       case "pendente":
       default:
         return "Pendente";
@@ -148,7 +148,7 @@ export default function ProposalSentDetailScreen() {
   };
 
   const handleContact = () => {
-    Alert.alert("Enviar Mensagem", `Enviar mensagem para ${artist.usuario}`);
+    Alert.alert("Enviar Mensagem", `Enviar mensagem para ${proposal?.artista?.name || "artista"}`);
   };
 
   const formatDate = (dateString: string) => {
@@ -249,22 +249,12 @@ export default function ProposalSentDetailScreen() {
               <Text style={styles.artistIcon}>🎤</Text>
             </View>
             <View style={styles.artistDetails}>
-              <Text style={styles.artistName}>{artist.usuario}</Text>
-              <Text style={styles.artistType}>
-                {artist.tipo_usuario === "banda" ? "🎸 Banda" : "🎵 Artista"}
-              </Text>
-              <Text style={styles.artistLocation}>
-                📍 {artist.local_atuacao}
-              </Text>
-              {artist.disponivel && (
-                <View style={styles.disponibilidadeBadge}>
-                  <Text style={styles.disponibilidadeText}>Disponível</Text>
-                </View>
-              )}
+              <Text style={styles.artistName}>{proposal?.artista?.name || "Artista"}</Text>
+              <Text style={styles.artistType}>🎵 Artista</Text>
             </View>
           </View>
 
-          <Text style={styles.artistDescription}>{artist.descricao}</Text>
+          <Text style={styles.artistDescription}>{proposal?.descricao}</Text>
         </View>
 
         {/* Additional Details */}
@@ -283,7 +273,7 @@ export default function ProposalSentDetailScreen() {
             </View>
           )}
 
-          {status === "aceito" && (
+          {status === "aceita" && (
             <View style={styles.statusInfo}>
               <Text style={styles.statusInfoIcon}>✅</Text>
               <View style={styles.statusInfoContent}>
@@ -295,7 +285,7 @@ export default function ProposalSentDetailScreen() {
             </View>
           )}
 
-          {status === "recusado" && (
+          {status === "recusada" && (
             <View style={styles.statusInfo}>
               <Text style={styles.statusInfoIcon}>❌</Text>
               <View style={styles.statusInfoContent}>

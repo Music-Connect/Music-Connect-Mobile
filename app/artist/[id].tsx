@@ -32,12 +32,12 @@ export default function PublicProfileScreen() {
     try {
       setLoading(true);
       console.log("[ARTIST] Loading artist with ID:", id);
-      const response = await api.getArtistaDetalhes(id as string);
+      const response = await api.getArtista(id as string);
       console.log("[ARTIST] Response:", JSON.stringify(response, null, 2));
 
-      if (response.success && response.data?.artista) {
-        console.log("[ARTIST] Artist loaded:", response.data.artista);
-        setArtist(response.data.artista);
+      if (response) {
+        console.log("[ARTIST] Artist loaded:", response);
+        setArtist(response);
       } else {
         console.error("[ARTIST] Invalid response structure:", response);
       }
@@ -49,7 +49,7 @@ export default function PublicProfileScreen() {
   };
 
   const handleSendProposal = () => {
-    router.push(`/create-proposal?id=${artist.id_usuario}`);
+    router.push(`/create-proposal?id=${artist.id}`);
   };
 
   const renderPublicacoes = () => (
@@ -146,12 +146,12 @@ export default function PublicProfileScreen() {
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {artist.usuario.substring(0, 2).toUpperCase()}
+                  {artist.name.substring(0, 2).toUpperCase()}
                 </Text>
               </View>
             </View>
 
-            <Text style={styles.artistName}>{artist.usuario}</Text>
+            <Text style={styles.artistName}>{artist.name}</Text>
             <Text style={styles.artistType}>{artist.tipo_usuario}</Text>
             {(artist.cidade || artist.estado) && (
               <Text style={styles.artistLocation}>

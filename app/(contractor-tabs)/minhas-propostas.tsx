@@ -11,8 +11,10 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import api from "@/services/api";
 
+import { Usuario } from "@/services/api";
+
 interface Proposal {
-  id_proposta: string;
+  id_proposta: number;
   titulo?: string;
   descricao?: string;
   valor_oferecido?: number;
@@ -27,17 +29,10 @@ interface Proposal {
   tipo_proposta?: "recebida" | "enviada";
 }
 
-interface User {
-  id_usuario?: string;
-  usuario?: string;
-  email?: string;
-  tipo_usuario?: string;
-}
-
 export default function ContractorMinhasPropostasScreen() {
   const router = useRouter();
   const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
@@ -52,16 +47,16 @@ export default function ContractorMinhasPropostasScreen() {
       setLoading(true);
 
       const [userRes, proposalsRes] = await Promise.all([
-        api.getCurrentUser(),
-        api.listarMinhasPropostas(),
+        api.getMe(),
+        api.getPropostasRecebidas(),
       ]);
 
-      if (userRes.success && userRes.data?.user) {
-        setUser(userRes.data.user as User);
+      if (userRes) {
+        setUser(userRes);
       }
 
-      if (proposalsRes.success && proposalsRes.data?.propostas) {
-        setProposals(proposalsRes.data.propostas);
+      if (proposalsRes.length >= 0) {
+        setProposals(proposalsRes as unknown as Proposal[]);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -87,16 +82,16 @@ export default function ContractorMinhasPropostasScreen() {
           setLoading(true);
 
           const [userRes, proposalsRes] = await Promise.all([
-            api.getCurrentUser(),
-            api.listarMinhasPropostas(),
+            api.getMe(),
+            api.getPropostasRecebidas(),
           ]);
 
-          if (userRes.success && userRes.data?.user) {
-            setUser(userRes.data.user as User);
+          if (userRes) {
+            setUser(userRes);
           }
 
-          if (proposalsRes.success && proposalsRes.data?.propostas) {
-            setProposals(proposalsRes.data.propostas);
+          if (proposalsRes.length >= 0) {
+            setProposals(proposalsRes as unknown as Proposal[]);
           }
         } catch (error) {
           console.error("Erro ao carregar dados:", error);
@@ -210,7 +205,7 @@ export default function ContractorMinhasPropostasScreen() {
             <View>
               <Text style={styles.welcomeText}>Minhas Propostas</Text>
               <Text style={styles.userName}>
-                {user?.usuario || "Contratante"}
+                {user?.name || "Contratante"}
               </Text>
             </View>
             <View style={styles.statusBadgeActive}>

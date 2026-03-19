@@ -36,12 +36,11 @@ export default function CreateProposalScreen() {
       setLoading(true);
 
       // ✅ Verificar tipo de usuário logado
-      const userResponse = await api.getCurrentUser();
-      const currentUser = userResponse.data?.user;
+      const currentUser = await api.getMe();
 
       if (!currentUser) {
         Alert.alert("Erro", "Usuário não autenticado");
-        router.replace("/(auth)/login");
+        router.replace("/login");
         return;
       }
 
@@ -58,9 +57,9 @@ export default function CreateProposalScreen() {
       setUser(currentUser);
 
       // Carregar artista
-      const response = await api.getArtistaDetalhes(Number(id));
-      if (response.success && response.data?.artista) {
-        setArtist(response.data.artista);
+      const artistData = await api.getArtista(String(id));
+      if (artistData) {
+        setArtist(artistData);
       }
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
@@ -200,25 +199,16 @@ export default function CreateProposalScreen() {
     try {
       console.log("[CREATE-PROPOSAL] Sending proposal to API...");
       const proposalData = {
-        id_artista: Number(id),
+        id_artista: String(id),
         titulo: form.titulo,
         descricao: form.descricao,
-        local: form.local,
-        endereco_completo: form.endereco_completo || undefined,
-        tipo_evento: form.tipo_evento || undefined,
+        local_evento: form.local,
+        data_evento: convertDate(form.data),
+        hora_evento: form.hora || undefined,
+        valor_oferecido: Number(form.valor.replace(/[^0-9.]/g, "")),
         duracao_horas: form.duracao_horas
           ? Number(form.duracao_horas)
           : undefined,
-        publico_esperado: form.publico_esperado
-          ? Number(form.publico_esperado)
-          : undefined,
-        equipamento_incluso: form.equipamento_incluso,
-        nome_responsavel: form.nome_responsavel || undefined,
-        telefone_contato: form.telefone_contato || undefined,
-        observacoes: form.observacoes || undefined,
-        data: convertDate(form.data),
-        hora: form.hora || undefined,
-        valor: form.valor.replace(/[^0-9.]/g, ""), // Remove "R$ " e outros caracteres
       };
       console.log(
         "[CREATE-PROPOSAL] Proposal data:",
@@ -229,15 +219,13 @@ export default function CreateProposalScreen() {
 
       console.log("[CREATE-PROPOSAL] Response:", response);
 
-      if (response.success) {
+      if (response) {
         Alert.alert("Sucesso", "Proposta enviada com sucesso!", [
           {
             text: "OK",
             onPress: () => router.back(),
           },
         ]);
-      } else {
-        Alert.alert("Erro", response.error || "Erro ao criar proposta");
       }
     } catch (error) {
       console.error("[CREATE-PROPOSAL] Error:", error);
@@ -265,7 +253,7 @@ export default function CreateProposalScreen() {
               <Text style={styles.avatarIcon}>🎤</Text>
             </View>
             <View style={styles.artistInfo}>
-              <Text style={styles.artistName}>{artist.usuario}</Text>
+              <Text style={styles.artistName}>{artist.name}</Text>
               <Text style={styles.artistType}>{artist.tipo_usuario}</Text>
             </View>
           </View>

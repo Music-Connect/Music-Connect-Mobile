@@ -19,11 +19,10 @@ export default function RedirectScreen() {
         }
 
         // Get current user to check type
-        const userResponse = await api.getCurrentUser();
+        const user = await api.getMe();
 
-        if (userResponse.success && userResponse.data?.user) {
-          const user = userResponse.data.user;
-          const userType = user.tipo_usuario || user.tipo;
+        if (user) {
+          const userType = user.tipo_usuario;
 
           // Redirect based on user type
           if (userType === "artista") {

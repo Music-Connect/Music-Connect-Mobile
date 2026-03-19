@@ -26,11 +26,10 @@ export default function ForgotPasswordScreen() {
 
     setIsLoading(true);
     try {
-      const response = await api.forgotPassword(email);
+      await api.forgotPassword(email);
       Alert.alert(
         "E-mail enviado!",
-        response.message ||
-          "Se o email existir, você receberá instruções para redefinir sua senha.",
+        "Se o email existir, você receberá instruções para redefinir sua senha.",
         [
           {
             text: "OK",

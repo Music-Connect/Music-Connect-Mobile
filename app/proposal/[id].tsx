@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import api from "@/services/api";
 
-type ProposalStatus = "pendente" | "aceita" | "recusada";
+type ProposalStatus = "pendente" | "aceita" | "recusada" | "cancelada";
 
 export default function ProposalDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -35,15 +35,14 @@ export default function ProposalDetailScreen() {
       setLoading(true);
 
       // ✅ Carregar usuário logado
-      const userResponse = await api.getCurrentUser();
-      const currentUser = userResponse.data?.user;
+      const currentUser = await api.getMe();
       if (currentUser) {
         setUser(currentUser);
       }
 
-      const response = await api.listarMinhasPropostas();
-      if (response.success && response.data?.propostas) {
-        const found = response.data.propostas.find(
+      const response = await api.getPropostasRecebidas();
+      if (response) {
+        const found = response.find(
           (p: any) => p.id_proposta.toString() === id.toString(),
         );
         if (found) {
@@ -95,7 +94,7 @@ export default function ProposalDetailScreen() {
         {
           text: "OK",
           onPress: () => {
-            setStatus("aceito");
+            setStatus("aceita");
           },
         },
       ],
@@ -112,7 +111,7 @@ export default function ProposalDetailScreen() {
           text: "Recusar",
           style: "destructive",
           onPress: () => {
-            setStatus("recusado");
+            setStatus("recusada");
             Alert.alert("Proposta recusada");
           },
         },
@@ -126,9 +125,9 @@ export default function ProposalDetailScreen() {
 
   const getStatusColor = (status: ProposalStatus) => {
     switch (status) {
-      case "aceito":
+      case "aceita":
         return "#10B981";
-      case "recusado":
+      case "recusada":
         return "#EF4444";
       case "pendente":
       default:
@@ -138,10 +137,10 @@ export default function ProposalDetailScreen() {
 
   const getStatusLabel = (status: ProposalStatus) => {
     switch (status) {
-      case "aceito":
-        return "Aceito";
-      case "recusado":
-        return "Recusado";
+      case "aceita":
+        return "Aceita";
+      case "recusada":
+        return "Recusada";
       case "pendente":
       default:
         return "Pendente";

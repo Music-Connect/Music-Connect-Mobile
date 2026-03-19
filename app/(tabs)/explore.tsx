@@ -16,8 +16,8 @@ import AppHeader from "@/components/AppHeader";
 
 // Type matching backend Usuario for artistas
 interface Artist {
-  id_usuario: number;
-  usuario: string;
+  id: string;
+  name: string;
   tipo_usuario: string;
   cidade?: string;
   estado?: string;
@@ -59,18 +59,18 @@ export default function ExploreScreen() {
       setLoading(true);
       const [artistsRes, userRes] = await Promise.all([
         api.listarArtistas(),
-        api.getCurrentUser(),
+        api.getMe(),
       ]);
 
-      if (artistsRes.success && artistsRes.data?.artistas) {
+      if (true) {
         // Cast to Artist[] since backend returns compatible shape
-        const artistsList = artistsRes.data.artistas as unknown as Artist[];
+        const artistsList = artistsRes.artistas as unknown as Artist[];
         setArtists(artistsList);
         setFilteredArtists(artistsList);
       }
 
-      if (userRes.success && userRes.data?.user) {
-        setUser(userRes.data.user);
+      if (userRes) {
+        setUser(userRes);
       }
     } catch (error) {
       console.error("[EXPLORE] Error loading data:", error);
@@ -97,7 +97,7 @@ export default function ExploreScreen() {
     if (query.trim()) {
       const q = query.toLowerCase();
       filtered = filtered.filter((artist) => {
-        const matchesName = artist.usuario.toLowerCase().includes(q);
+        const matchesName = artist.name.toLowerCase().includes(q);
         const matchesCidade = artist.cidade?.toLowerCase().includes(q);
         const matchesEstado = artist.estado?.toLowerCase().includes(q);
         const matchesGenero = artist.genero_musical?.toLowerCase().includes(q);
@@ -124,17 +124,17 @@ export default function ExploreScreen() {
     return (
       <TouchableOpacity
         style={styles.artistCard}
-        onPress={() => router.push(`/artist/${item.id_usuario}`)}
+        onPress={() => router.push(`/artist/${item.id}`)}
         activeOpacity={0.8}
       >
         <View style={styles.artistAvatar}>
           <Text style={styles.artistAvatarText}>
-            {item.usuario.substring(0, 1).toUpperCase()}
+            {item.name.substring(0, 1).toUpperCase()}
           </Text>
         </View>
         <View style={styles.artistInfo}>
           <View style={styles.artistHeader}>
-            <Text style={styles.artistName}>{item.usuario}</Text>
+            <Text style={styles.artistName}>{item.name}</Text>
             {item.media_avaliacoes && Number(item.media_avaliacoes) > 0 && (
               <View style={styles.ratingBadge}>
                 <Text style={styles.ratingText}>
@@ -156,7 +156,7 @@ export default function ExploreScreen() {
         <TouchableOpacity
           style={styles.connectButton}
           onPress={() =>
-            router.push(`/create-proposal?artistId=${item.id_usuario}`)
+            router.push(`/create-proposal?artistId=${item.id}`)
           }
         >
           <Text style={styles.connectButtonText}>Contratar</Text>
@@ -247,7 +247,7 @@ export default function ExploreScreen() {
       <FlatList
         data={filteredArtists}
         renderItem={renderArtistCard}
-        keyExtractor={(item) => item.id_usuario.toString()}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={renderHeader}
         showsVerticalScrollIndicator={false}

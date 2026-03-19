@@ -12,9 +12,9 @@ export default function TabLayout() {
     React.useCallback(() => {
       const loadUserType = async () => {
         try {
-          const response = await api.getCurrentUser();
-          if (response.success && response.data?.user?.tipo) {
-            setUserType(response.data.user.tipo);
+          const response = await api.getMe();
+          if (response?.tipo_usuario) {
+            setUserType(response.tipo_usuario);
           }
         } catch (error) {
           console.error("Erro ao carregar tipo de usuário:", error);

@@ -43,9 +43,9 @@ export default function HistoryScreen() {
   const loadHistory = async () => {
     try {
       setLoading(true);
-      const response = await api.listarMinhasPropostas();
-      if (response.success && response.data?.propostas) {
-        const items = response.data.propostas.map((p: any) => ({
+      const response = await api.getPropostasRecebidas();
+      if (response) {
+        const items = response.map((p: any) => ({
           id: p.id_proposta,
           titulo: p.descricao || "Proposta",
           artista: p.tipo_proposta === "enviada" ? p.nome_outro : undefined,

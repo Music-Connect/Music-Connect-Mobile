@@ -31,21 +31,21 @@ export default function ArtistProfileScreen() {
   const loadUserData = async () => {
     try {
       setLoading(true);
-      const response = await api.getCurrentUser();
-      if (response.success && response.data?.user) {
-        const userData = response.data.user;
+      const response = await api.getMe();
+      if (response) {
+        const userData = response;
         setUser(userData);
 
         // Load stats for artist
         const [propostasRes, avaliacoesRes] = await Promise.all([
-          api.getPropostasArtistaRecebidas(userData.id_usuario),
-          api.getAvaliacoes(userData.id_usuario),
+          api.getPropostasRecebidas(),
+          api.getAvaliacoes(userData.id),
         ]);
 
         setStats({
-          propostas: propostasRes.data?.propostas?.length || 0,
-          avaliacoes: avaliacoesRes.data?.avaliacoes?.length || 0,
-          mediaAvaliacoes: userData.media_avaliacoes || 0,
+          propostas: propostasRes.length || 0,
+          avaliacoes: avaliacoesRes.avaliacoes?.length || 0,
+          mediaAvaliacoes: avaliacoesRes.media || 0,
         });
       }
     } catch (error) {
@@ -112,7 +112,7 @@ export default function ArtistProfileScreen() {
             <View style={styles.avatarWrapper}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {user.usuario.substring(0, 1).toUpperCase()}
+                  {user.name.substring(0, 1).toUpperCase()}
                 </Text>
               </View>
               <TouchableOpacity
@@ -124,7 +124,7 @@ export default function ArtistProfileScreen() {
             </View>
           </View>
 
-          <Text style={styles.userName}>{user.usuario}</Text>
+          <Text style={styles.userName}>{user.name}</Text>
           <View style={styles.badgeContainer}>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>🎵 Artista</Text>

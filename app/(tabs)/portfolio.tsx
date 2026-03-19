@@ -26,7 +26,7 @@ interface Work {
 }
 
 interface User {
-  id_usuario?: string;
+  id?: string;
   usuario?: string;
   email?: string;
   tipo_usuario?: string;
@@ -52,17 +52,17 @@ export default function PortfolioScreen() {
           setLoading(true);
 
           const [userRes, worksRes] = await Promise.all([
-            api.getCurrentUser(),
-            api.listarMinhasPropostas(),
+            api.getMe(),
+            api.getPropostasRecebidas(),
           ]);
 
-          if (userRes.success && userRes.data?.user) {
-            setUser(userRes.data.user as User);
+          if (userRes) {
+            setUser(userRes);
           }
 
-          if (worksRes.success && worksRes.data?.propostas) {
+          if (worksRes.length >= 0) {
             // Filter only completed proposals
-            const completedWorks = (worksRes.data.propostas as any[])
+            const completedWorks = (worksRes as any[])
               .filter((p) => p.status === "concluida")
               .map((p) => ({
                 id_proposta: p.id_proposta,
@@ -93,9 +93,9 @@ export default function PortfolioScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const worksRes = await api.listarMinhasPropostas();
-      if (worksRes.success && worksRes.data?.propostas) {
-        const completedWorks = (worksRes.data.propostas as any[])
+      const worksRes = await api.getPropostasRecebidas();
+      if (worksRes.length >= 0) {
+        const completedWorks = (worksRes as any[])
           .filter((p) => p.status === "concluida")
           .map((p) => ({
             id_proposta: p.id_proposta,
