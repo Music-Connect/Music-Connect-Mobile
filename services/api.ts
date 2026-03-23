@@ -389,6 +389,212 @@ async function avaliarUsuario(payload: {
   return data.data!;
 }
 
+// ─── Feed / Posts ─────────────────────────────────────────────────────────────
+
+export interface Post {
+  id: string;
+  id_autor: string;
+  conteudo: string;
+  tipo: "post" | "disponibilidade" | "buscando";
+  visibilidade: string;
+  imagens: string[];
+  video_url?: string | null;
+  tags: string[];
+  cidade?: string | null;
+  estado?: string | null;
+  curtidas_count: number;
+  comentarios_count: number;
+  created_at: string;
+  curtiu?: boolean;
+  autor: {
+    id: string;
+    name: string;
+    image: string | null;
+    tipo_usuario: string;
+    genero_musical?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
+  };
+}
+
+export interface Comentario {
+  id: string;
+  id_autor: string;
+  id_post: string;
+  id_comentario_pai?: string | null;
+  conteudo: string;
+  created_at: string;
+  autor: { id: string; name: string; image: string | null; tipo_usuario: string };
+  respostas?: Comentario[];
+}
+
+export interface StoryData {
+  id: string;
+  midia_url: string;
+  tipo_midia: "imagem" | "video";
+  duracao: number;
+  views_count: number;
+  created_at: string;
+  expira_em: string;
+  visto?: boolean;
+}
+
+export interface StoryGroup {
+  user: { id: string; name: string; image: string | null; tipo_usuario: string };
+  stories: StoryData[];
+  hasUnseen: boolean;
+}
+
+export interface CursorMeta {
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+async function getFeed(params?: {
+  cursor?: string;
+  limit?: number;
+  tipo?: string;
+}): Promise<{ posts: Post[]; meta: CursorMeta }> {
+  const qs = new URLSearchParams();
+  if (params?.cursor) qs.append("cursor", params.cursor);
+  if (params?.limit) qs.append("limit", String(params.limit));
+  if (params?.tipo) qs.append("tipo", params.tipo);
+
+  const data = await request<{ data: Post[]; meta: CursorMeta }>(
+    `/api/posts?${qs}`,
+    {},
+    false,
+  );
+  return { posts: data.data ?? [], meta: data.meta };
+}
+
+async function getFeedRecomendado(params?: {
+  cursor?: string;
+  limit?: number;
+}): Promise<{ posts: Post[]; meta: CursorMeta }> {
+  const qs = new URLSearchParams();
+  if (params?.cursor) qs.append("cursor", params.cursor);
+  if (params?.limit) qs.append("limit", String(params.limit));
+
+  const data = await request<{ data: Post[]; meta: CursorMeta }>(
+    `/api/posts/feed/recomendados?${qs}`,
+  );
+  return { posts: data.data ?? [], meta: data.meta };
+}
+
+async function createPost(payload: {
+  conteudo: string;
+  tipo?: string;
+  imagens?: string[];
+  video_url?: string;
+  tags?: string[];
+}): Promise<Post> {
+  const data = await request<ApiResponse<Post>>("/api/posts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return data.data!;
+}
+
+async function deletePost(id: string): Promise<void> {
+  await request(`/api/posts/${id}`, { method: "DELETE" });
+}
+
+async function curtirPost(id: string): Promise<void> {
+  await request(`/api/posts/${id}/curtir`, { method: "POST" });
+}
+
+async function descurtirPost(id: string): Promise<void> {
+  await request(`/api/posts/${id}/curtir`, { method: "DELETE" });
+}
+
+async function getComentarios(
+  postId: string,
+  cursor?: string,
+): Promise<{ comentarios: Comentario[]; meta: CursorMeta }> {
+  const qs = new URLSearchParams();
+  if (cursor) qs.append("cursor", cursor);
+
+  const data = await request<{ data: Comentario[]; meta: CursorMeta }>(
+    `/api/posts/${postId}/comentarios?${qs}`,
+    {},
+    false,
+  );
+  return { comentarios: data.data ?? [], meta: data.meta };
+}
+
+async function createComentario(
+  postId: string,
+  payload: { conteudo: string; id_comentario_pai?: string },
+): Promise<Comentario> {
+  const data = await request<ApiResponse<Comentario>>(
+    `/api/posts/${postId}/comentarios`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+  return data.data!;
+}
+
+async function deleteComentario(postId: string, comentarioId: string): Promise<void> {
+  await request(`/api/posts/${postId}/comentarios/${comentarioId}`, {
+    method: "DELETE",
+  });
+}
+
+// ─── Stories ─────────────────────────────────────────────────────────────────
+
+async function getStories(): Promise<StoryGroup[]> {
+  const data = await request<{ data: StoryGroup[] }>("/api/stories");
+  return data.data ?? [];
+}
+
+async function createStory(payload: {
+  midia_url: string;
+  tipo_midia?: string;
+  duracao?: number;
+}): Promise<StoryData> {
+  const data = await request<ApiResponse<StoryData>>("/api/stories", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return data.data!;
+}
+
+async function deleteStory(id: string): Promise<void> {
+  await request(`/api/stories/${id}`, { method: "DELETE" });
+}
+
+async function visualizarStory(id: string): Promise<void> {
+  await request(`/api/stories/${id}/visualizar`, { method: "POST" });
+}
+
+// ─── Recomendações ───────────────────────────────────────────────────────────
+
+export interface ArtistaRecomendado {
+  id: string;
+  name: string;
+  image: string | null;
+  genero_musical?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  media_avaliacoes: number;
+  total_avaliacoes: number;
+}
+
+async function getRecomendacoesArtistas(
+  params?: { page?: number; limit?: number },
+): Promise<ArtistaRecomendado[]> {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.append("page", String(params.page));
+  if (params?.limit) qs.append("limit", String(params.limit));
+
+  const data = await request<{ data: ArtistaRecomendado[] }>(
+    `/api/recomendacoes/artistas?${qs}`,
+    {},
+    false,
+  );
+  return data.data ?? [];
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function isAuthenticated(): Promise<boolean> {
@@ -442,6 +648,23 @@ const mobileAPI = {
   getAvaliacoes,
   avaliarUsuario,
   listarRecomendacoes,
+  // feed / posts
+  getFeed,
+  getFeedRecomendado,
+  createPost,
+  deletePost,
+  curtirPost,
+  descurtirPost,
+  getComentarios,
+  createComentario,
+  deleteComentario,
+  // stories
+  getStories,
+  createStory,
+  deleteStory,
+  visualizarStory,
+  // recomendacoes
+  getRecomendacoesArtistas,
 };
 
 export default mobileAPI;

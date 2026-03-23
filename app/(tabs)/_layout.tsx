@@ -55,11 +55,23 @@ export default function TabLayout() {
         },
       }}
     >
-      {/* Tab 1: Feed */}
+      {/* Tab 1: Social Feed */}
+      <Tabs.Screen
+        name="social-feed"
+        options={{
+          title: "Feed",
+          href: "/(tabs)/social-feed",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="newspaper.fill" color={color} />
+          ),
+        }}
+      />
+
+      {/* Tab 2: Oportunidades (propostas) */}
       <Tabs.Screen
         name="index"
         options={{
-          title: "Feed",
+          title: "Início",
           href: "/(tabs)",
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="house.fill" color={color} />
