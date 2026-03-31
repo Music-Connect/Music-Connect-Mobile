@@ -5,8 +5,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 interface AppHeaderProps {
   user?: {
@@ -17,6 +19,7 @@ interface AppHeaderProps {
   showSearch?: boolean;
   showNotifications?: boolean;
   title?: string;
+  notificationCount?: number;
   onSearchPress?: () => void;
 }
 
@@ -25,72 +28,67 @@ export default function AppHeader({
   showSearch = true,
   showNotifications = true,
   title,
+  notificationCount = 0,
   onSearchPress,
 }: AppHeaderProps) {
   const router = useRouter();
 
-  const getInitial = () => {
-    if (user?.usuario) {
-      return user.usuario.charAt(0).toUpperCase();
-    }
-    return "U";
-  };
+  const getInitial = () => user?.usuario?.charAt(0).toUpperCase() ?? "U";
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {/* Left: Profile Avatar */}
+      {/* Left: Avatar */}
       <TouchableOpacity
-        style={styles.avatarContainer}
         onPress={() => router.push("/(tabs)/profile")}
+        activeOpacity={0.7}
       >
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitial()}</Text>
-        </View>
-        {user?.tipo_usuario && (
-          <View style={styles.userTypeBadge}>
-            <Text style={styles.userTypeBadgeText}>
-              {user.tipo_usuario === "artista" ? "🎵" : "🎯"}
-            </Text>
+        {user?.imagem_perfil_url ? (
+          <Image source={{ uri: user.imagem_perfil_url }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarFallback}>
+            <Text style={styles.avatarText}>{getInitial()}</Text>
           </View>
         )}
       </TouchableOpacity>
 
-      {/* Center: Title or Logo */}
-      <View style={styles.centerContainer}>
+      {/* Center: Logo or Title */}
+      <View style={styles.center}>
         {title ? (
           <Text style={styles.title}>{title}</Text>
         ) : (
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoIcon}>🎸</Text>
-            <Text style={styles.logoText}>Music Connect</Text>
-          </View>
+          <Text style={styles.logo}>
+            <Text style={styles.logoAccent}>Music</Text>
+            {" Connect"}
+          </Text>
         )}
       </View>
 
       {/* Right: Actions */}
-      <View style={styles.actionsContainer}>
+      <View style={styles.actions}>
         {showSearch && (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={onSearchPress || (() => router.push("/(tabs)/explore"))}
+            onPress={onSearchPress ?? (() => router.push("/advanced-search" as any))}
+            activeOpacity={0.7}
+            style={styles.iconBtn}
           >
-            <Text style={styles.actionIcon}>🔍</Text>
+            <Ionicons name="search-outline" size={22} color="#E4E4E7" />
           </TouchableOpacity>
         )}
         {showNotifications && (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              // TODO: Navigate to notifications
-            }}
+            activeOpacity={0.7}
+            style={styles.iconBtn}
           >
-            <Text style={styles.actionIcon}>🔔</Text>
-            {/* Notification badge */}
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>3</Text>
-            </View>
+            <Ionicons name="notifications-outline" size={22} color="#E4E4E7" />
+            {notificationCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -104,102 +102,76 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 12,
+    paddingTop: 52,
+    paddingBottom: 10,
     backgroundColor: "#000",
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.5,
     borderBottomColor: "#1A1A1A",
   },
-
-  // Avatar
-  avatarContainer: {
-    position: "relative",
-  },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  avatarFallback: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: "#EC4899",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#333",
   },
   avatarText: {
     color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
+    fontSize: 14,
+    fontWeight: "700",
   },
-  userTypeBadge: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    backgroundColor: "#000",
-    borderRadius: 10,
-    padding: 2,
-  },
-  userTypeBadgeText: {
-    fontSize: 10,
-  },
-
-  // Center
-  centerContainer: {
+  center: {
     flex: 1,
     alignItems: "center",
-    marginHorizontal: 16,
   },
   title: {
     color: "#FFF",
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
-  logoContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  logoIcon: {
-    fontSize: 20,
-  },
-  logoText: {
+  logo: {
     color: "#FFF",
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: -0.3,
   },
-
-  // Actions
-  actionsContainer: {
+  logoAccent: {
+    color: "#EC4899",
+  },
+  actions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
   },
-  actionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#1A1A1A",
+  iconBtn: {
+    width: 38,
+    height: 38,
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
   },
-  actionIcon: {
-    fontSize: 18,
-  },
-  notificationBadge: {
+  badge: {
     position: "absolute",
-    top: -2,
-    right: -2,
+    top: 4,
+    right: 4,
     backgroundColor: "#EC4899",
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
   },
-  notificationBadgeText: {
+  badgeText: {
     color: "#FFF",
-    fontSize: 10,
-    fontWeight: "bold",
+    fontSize: 9,
+    fontWeight: "800",
   },
 });
