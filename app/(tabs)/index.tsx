@@ -11,9 +11,11 @@ import {
   RefreshControl,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import api from "@/services/api";
 import FeedProposalCard from "@/components/FeedProposalCard";
 import AppHeader from "@/components/AppHeader";
+import { Usuario } from "@/services/api";
 
 interface FeedProposal {
   id_proposta: string;
@@ -31,7 +33,15 @@ interface FeedProposal {
   publico_esperado?: number;
 }
 
-import { Usuario } from "@/services/api";
+const EVENT_TYPES = [
+  "Todos",
+  "Casamento",
+  "Aniversário",
+  "Corporativo",
+  "Festival",
+  "Bar/Restaurante",
+  "Formatura",
+];
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -40,99 +50,36 @@ export default function FeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-
-  // Filters
   const [searchLocal, setSearchLocal] = useState("");
-  const [selectedTipoEvento, setSelectedTipoEvento] = useState<string>("");
-  const [showFilters, setShowFilters] = useState(false);
-
-  const eventTypes = [
-    "Casamento",
-    "Aniversário",
-    "Corporativo",
-    "Festival",
-    "Bar/Restaurante",
-    "Formatura",
-  ];
+  const [selectedTipo, setSelectedTipo] = useState("Todos");
 
   const isArtist = user?.tipo_usuario === "artista";
 
   useFocusEffect(
     React.useCallback(() => {
-      const fetchData = async () => {
-        try {
-          // Check if user has token first (lightweight check)
-          const hasToken = await api.hasToken();
-          if (!hasToken) {
-            console.log("No token found, redirecting to login");
-            router.replace("/login");
-            return;
-          }
-
-          setLoading(true);
-
-          const [userRes, feedRes] = await Promise.all([
-            api.getMe(),
-            api.listarRecomendacoes({
-              local: searchLocal || undefined,
-              tipo_evento: selectedTipoEvento || undefined,
-              limit: 20,
-              offset: 0,
-            }),
-          ]);
-
-          if (userRes) {
-            setUser(userRes);
-          }
-
-          if (feedRes.propostas.length >= 0) {
-            setProposals(feedRes.propostas as unknown as FeedProposal[]);
-            setHasMore(feedRes.hasMore || false);
-          }
-        } catch (error) {
-          console.error("Erro ao carregar feed:", error);
-          // If authentication error, redirect to login
-          if (error instanceof Error && error.message.includes("Token")) {
-            router.replace("/login");
-          }
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchData();
-    }, [searchLocal, selectedTipoEvento, router]),
+      loadData();
+    }, [searchLocal, selectedTipo]),
   );
 
   const loadData = async () => {
     try {
-      // Check if user has token first
       const hasToken = await api.hasToken();
-      if (!hasToken) {
-        router.replace("/login");
-        return;
-      }
+      if (!hasToken) { router.replace("/login"); return; }
 
       setLoading(true);
-
       const [userRes, feedRes] = await Promise.all([
         api.getMe(),
         api.listarRecomendacoes({
           local: searchLocal || undefined,
-          tipo_evento: selectedTipoEvento || undefined,
+          tipo_evento: selectedTipo === "Todos" ? undefined : selectedTipo,
           limit: 20,
           offset: 0,
         }),
       ]);
 
-      if (userRes) {
-        setUser(userRes);
-      }
-
-      if (feedRes.propostas.length >= 0) {
-        setProposals(feedRes.propostas as unknown as FeedProposal[]);
-        setHasMore(feedRes.hasMore || false);
-      }
+      if (userRes) setUser(userRes);
+      setProposals(feedRes.propostas as unknown as FeedProposal[]);
+      setHasMore(feedRes.hasMore || false);
     } catch (error) {
       console.error("Erro ao carregar feed:", error);
       if (error instanceof Error && error.message.includes("Token")) {
@@ -151,263 +98,85 @@ export default function FeedScreen() {
 
   const handleLoadMore = async () => {
     if (!hasMore || loading) return;
-
     try {
       const feedRes = await api.listarRecomendacoes({
         local: searchLocal || undefined,
-        tipo_evento: selectedTipoEvento || undefined,
+        tipo_evento: selectedTipo === "Todos" ? undefined : selectedTipo,
         limit: 20,
         offset: proposals.length,
       });
-
-      if (feedRes.propostas.length >= 0) {
-        setProposals([
-          ...proposals,
-          ...(feedRes.propostas as unknown as FeedProposal[]),
-        ]);
-        setHasMore(feedRes.hasMore || false);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar mais propostas:", error);
-    }
+      setProposals([...proposals, ...(feedRes.propostas as unknown as FeedProposal[])]);
+      setHasMore(feedRes.hasMore || false);
+    } catch {}
   };
-
-  const clearFilters = () => {
-    setSearchLocal("");
-    setSelectedTipoEvento("");
-  };
-
-  const renderProposalCard = ({ item }: { item: FeedProposal }) => (
-    <FeedProposalCard
-      id={item.id_proposta}
-      titulo={item.titulo}
-      descricao={item.descricao}
-      valor={item.valor_oferecido}
-      data={item.data}
-      hora={item.hora}
-      local={item.local}
-      tipoEvento={item.tipo_evento}
-      contratanteNome={item.contratante_nome}
-      duracao={item.duracao_horas}
-      publicoEsperado={item.publico_esperado}
-      onPress={() => router.push(`/proposal/${item.id_proposta}`)}
-    />
-  );
 
   const renderHeader = () => (
-    <View>
-      {/* Welcome Section */}
-      <View style={styles.welcomeSection}>
-        <Text style={styles.greetingText}>
-          👋 Olá, {user?.name || "Usuário"}!
-        </Text>
-        <Text style={styles.welcomeTitle}>
-          {isArtist
-            ? "Encontre suas próximas oportunidades"
-            : "Descubra Novos Artistas"}
-        </Text>
+    <View style={styles.headerSection}>
+      {/* Search */}
+      <View style={styles.searchRow}>
+        <Ionicons name="location-outline" size={16} color="#52525B" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Cidade ou região..."
+          placeholderTextColor="#52525B"
+          value={searchLocal}
+          onChangeText={setSearchLocal}
+        />
+        {searchLocal.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchLocal("")}>
+            <Ionicons name="close-circle" size={16} color="#52525B" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Story-like Quick Actions - Diferentes para Artista vs Contratante */}
+      {/* Event type chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.storiesContainer}
-        contentContainerStyle={styles.storiesContent}
+        contentContainerStyle={styles.chipsRow}
       >
-        {isArtist ? (
-          // Stories para Artistas
-          <>
+        {EVENT_TYPES.map((type) => {
+          const active = selectedTipo === type;
+          return (
             <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/(tabs)/minhas-propostas")}
+              key={type}
+              onPress={() => setSelectedTipo(type)}
+              style={[styles.chip, active && styles.chipActive]}
             >
-              <View style={styles.storyCircle}>
-                <Text style={styles.storyIcon}>📋</Text>
-              </View>
-              <Text style={styles.storyLabel}>Propostas</Text>
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                {type}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => setShowFilters(!showFilters)}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>🔍</Text>
-              </View>
-              <Text style={styles.storyLabel}>Filtrar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/(tabs)/portfolio")}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>🎪</Text>
-              </View>
-              <Text style={styles.storyLabel}>Portfólio</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/reviews")}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>⭐</Text>
-              </View>
-              <Text style={styles.storyLabel}>Avaliações</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/history")}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>📜</Text>
-              </View>
-              <Text style={styles.storyLabel}>Histórico</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          // Stories para Contratantes
-          <>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/create-proposal")}
-            >
-              <View style={styles.storyCircle}>
-                <Text style={styles.storyIcon}>✨</Text>
-              </View>
-              <Text style={styles.storyLabel}>Criar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => setShowFilters(!showFilters)}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>🔍</Text>
-              </View>
-              <Text style={styles.storyLabel}>Filtrar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/(tabs)/explore")}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>🎵</Text>
-              </View>
-              <Text style={styles.storyLabel}>Artistas</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/(tabs)/minhas-propostas")}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>📋</Text>
-              </View>
-              <Text style={styles.storyLabel}>Minhas</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.storyItem}
-              onPress={() => router.push("/history")}
-            >
-              <View style={[styles.storyCircle, styles.storyCircleSecondary]}>
-                <Text style={styles.storyIcon}>📜</Text>
-              </View>
-              <Text style={styles.storyLabel}>Histórico</Text>
-            </TouchableOpacity>
-          </>
-        )}
+          );
+        })}
       </ScrollView>
 
-      {/* Filters Section */}
-      {showFilters && (
-        <View style={styles.filtersContainer}>
-          <Text style={styles.filtersTitle}>
-            {isArtist ? "Filtrar Oportunidades" : "Filtrar Propostas"}
-          </Text>
-
-          {/* Location Search */}
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>📍 Local</Text>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Digite a cidade ou região..."
-              placeholderTextColor="#666"
-              value={searchLocal}
-              onChangeText={setSearchLocal}
-            />
-          </View>
-
-          {/* Event Type Selection */}
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>🎉 Tipo de Evento</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.eventTypesContainer}>
-                {eventTypes.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.eventTypeChip,
-                      selectedTipoEvento === type && styles.eventTypeChipActive,
-                    ]}
-                    onPress={() =>
-                      setSelectedTipoEvento(
-                        selectedTipoEvento === type ? "" : type,
-                      )
-                    }
-                  >
-                    <Text
-                      style={[
-                        styles.eventTypeChipText,
-                        selectedTipoEvento === type &&
-                          styles.eventTypeChipTextActive,
-                      ]}
-                    >
-                      {type}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-
-          {/* Clear Filters Button */}
-          {(searchLocal || selectedTipoEvento) && (
-            <TouchableOpacity
-              style={styles.clearFiltersButton}
-              onPress={clearFilters}
-            >
-              <Text style={styles.clearFiltersText}>Limpar Filtros</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {/* Section Title */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Propostas Recomendadas</Text>
-        <Text style={styles.sectionSubtitle}>
-          {proposals.length} {proposals.length === 1 ? "proposta" : "propostas"}
+      {/* Section title */}
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionTitle}>
+          {isArtist ? "Oportunidades" : "Propostas"}
         </Text>
+        {proposals.length > 0 && (
+          <Text style={styles.sectionCount}>{proposals.length}</Text>
+        )}
       </View>
     </View>
   );
 
   if (loading && proposals.length === 0) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>Carregando feed...</Text>
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.loadingText}>Carregando...</Text>
       </View>
     );
   }
 
-  // If no user after loading, something went wrong with auth
   if (!loading && !user) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>Você não está autenticado</Text>
-        <TouchableOpacity
-          style={styles.loginButton}
-          onPress={() => router.replace("/login")}
-        >
-          <Text style={styles.loginButtonText}>Fazer Login</Text>
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.loadingText}>Não autenticado</Text>
+        <TouchableOpacity style={styles.loginBtn} onPress={() => router.replace("/login")}>
+          <Text style={styles.loginBtnText}>Fazer login</Text>
         </TouchableOpacity>
       </View>
     );
@@ -416,227 +185,121 @@ export default function FeedScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <AppHeader user={user} showSearch showNotifications />
+      <AppHeader user={user} showSearch={false} showNotifications />
       <FlatList
         data={proposals}
-        renderItem={renderProposalCard}
+        renderItem={({ item }) => (
+          <FeedProposalCard
+            id={item.id_proposta}
+            titulo={item.titulo}
+            descricao={item.descricao}
+            valor={item.valor_oferecido}
+            data={item.data}
+            hora={item.hora}
+            local={item.local}
+            tipoEvento={item.tipo_evento}
+            contratanteNome={item.contratante_nome}
+            duracao={item.duracao_horas}
+            publicoEsperado={item.publico_esperado}
+            onPress={() => router.push(`/proposal/${item.id_proposta}`)}
+          />
+        )}
         keyExtractor={(item) => item.id_proposta.toString()}
-        contentContainerStyle={styles.listContent}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>🎵</Text>
-            <Text style={styles.emptyStateText}>
-              Nenhuma proposta encontrada
-            </Text>
-            <Text style={styles.emptyStateSubtext}>
-              Tente ajustar os filtros ou volte mais tarde
-            </Text>
-          </View>
+          !loading ? (
+            <View style={styles.empty}>
+              <Ionicons name="musical-notes-outline" size={40} color="#3F3F46" />
+              <Text style={styles.emptyTitle}>Nenhuma proposta</Text>
+              <Text style={styles.emptyText}>Tente ajustar os filtros</Text>
+            </View>
+          ) : null
         }
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#EC4899"
-            colors={["#EC4899"]}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#EC4899" colors={["#EC4899"]} />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
+        contentContainerStyle={proposals.length === 0 ? { flex: 1 } : { paddingBottom: 80 }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-  centerContent: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    color: "#666",
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  loginButton: {
-    backgroundColor: "#EC4899",
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 12,
-  },
-  loginButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
+  container: { flex: 1, backgroundColor: "#000" },
+  center: { justifyContent: "center", alignItems: "center" },
+  loadingText: { color: "#52525B", fontSize: 14 },
+  loginBtn: { marginTop: 12, backgroundColor: "#EC4899", paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20 },
+  loginBtnText: { color: "#FFF", fontWeight: "700" },
+
+  headerSection: {
+    paddingTop: 12,
+    paddingBottom: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#1A1A1A",
   },
 
-  // Welcome Section
-  welcomeSection: {
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  greetingText: {
-    color: "#999",
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  welcomeTitle: {
-    color: "#FFF",
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-
-  // Stories (LinkedIn-style quick actions)
-  storiesContainer: {
-    marginBottom: 16,
-    marginHorizontal: -16,
-  },
-  storiesContent: {
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  storyItem: {
-    alignItems: "center",
-    gap: 6,
-  },
-  storyCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#EC4899",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 3,
-    borderColor: "#EC4899",
-  },
-  storyCircleSecondary: {
-    backgroundColor: "#1A1A1A",
-    borderColor: "#333",
-  },
-  storyIcon: {
-    fontSize: 24,
-  },
-  storyLabel: {
-    color: "#AAA",
-    fontSize: 11,
-    fontWeight: "600",
-  },
-
-  // Filters
-  filtersContainer: {
-    backgroundColor: "#1A1A1A",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 20,
-  },
-  filtersTitle: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 16,
-  },
-  filterGroup: {
-    marginBottom: 16,
-  },
-  filterLabel: {
-    color: "#AAA",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  searchInput: {
-    backgroundColor: "#000",
-    color: "#FFF",
-    padding: 12,
-    borderRadius: 8,
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: "#2A2A2A",
-  },
-  eventTypesContainer: {
+  // Search
+  searchRow: {
     flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: "#111",
+    borderRadius: 10,
+    borderWidth: 0.5,
+    borderColor: "#2A2A2A",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     gap: 8,
   },
-  eventTypeChip: {
-    backgroundColor: "#2A2A2A",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#2A2A2A",
+  searchIcon: { marginRight: 2 },
+  searchInput: {
+    flex: 1,
+    color: "#FFF",
+    fontSize: 14,
+    padding: 0,
   },
-  eventTypeChipActive: {
+
+  // Chips
+  chipsRow: {
+    paddingHorizontal: 16,
+    gap: 8,
+    paddingBottom: 12,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    borderColor: "#2A2A2A",
+    backgroundColor: "#111",
+  },
+  chipActive: {
     backgroundColor: "#EC4899",
     borderColor: "#EC4899",
   },
-  eventTypeChipText: {
-    color: "#AAA",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  eventTypeChipTextActive: {
-    color: "#FFF",
-  },
-  clearFiltersButton: {
-    backgroundColor: "#2A2A2A",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  clearFiltersText: {
-    color: "#EC4899",
-    fontSize: 13,
-    fontWeight: "bold",
-  },
+  chipText: { color: "#71717A", fontSize: 13, fontWeight: "500" },
+  chipTextActive: { color: "#FFF", fontWeight: "600" },
 
-  // Section Header
-  sectionHeader: {
+  // Section title
+  sectionRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    paddingTop: 2,
   },
-  sectionTitle: {
-    color: "#FFF",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  sectionSubtitle: {
-    color: "#666",
-    fontSize: 14,
+  sectionTitle: { color: "#FFF", fontSize: 15, fontWeight: "700" },
+  sectionCount: {
+    color: "#52525B",
+    fontSize: 13,
   },
 
-  // Empty State
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    backgroundColor: "#1A1A1A",
-    borderRadius: 12,
-    marginTop: 20,
-  },
-  emptyStateIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  emptyStateText: {
-    color: "#FFF",
-    fontSize: 16,
-    marginBottom: 8,
-    fontWeight: "600",
-  },
-  emptyStateSubtext: {
-    color: "#666",
-    fontSize: 14,
-    textAlign: "center",
-  },
+  // Empty
+  empty: { flex: 1, justifyContent: "center", alignItems: "center", gap: 8, paddingTop: 80 },
+  emptyTitle: { color: "#E4E4E7", fontSize: 15, fontWeight: "600" },
+  emptyText: { color: "#52525B", fontSize: 13 },
 });
