@@ -7,13 +7,16 @@ import {
   TouchableOpacity,
   StatusBar,
   RefreshControl,
+  Linking,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "@/services/api";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState({ propostas: 0, avaliacoes: 0, mediaAvaliacoes: 0 });
   const [loading, setLoading] = useState(true);
@@ -59,7 +62,7 @@ export default function ProfileScreen() {
   if (loading && !user) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.mutedText}>Carregando perfil...</Text>
+        <Text style={styles.mutedText}>Carregando...</Text>
       </View>
     );
   }
@@ -77,6 +80,12 @@ export default function ProfileScreen() {
 
   const isArtist = user.tipo_usuario === "artista";
 
+  const socialLinks = [
+    user.spotify_url && { icon: "musical-notes-outline" as const, label: "Spotify", url: user.spotify_url, color: "#1DB954" },
+    user.instagram_url && { icon: "logo-instagram" as const, label: "Instagram", url: user.instagram_url, color: "#E1306C" },
+    user.youtube_url && { icon: "logo-youtube" as const, label: "YouTube", url: user.youtube_url, color: "#FF0000" },
+  ].filter(Boolean) as { icon: any; label: string; url: string; color: string }[];
+
   const menuItems = [
     { icon: "time-outline" as const, label: "Histórico", onPress: () => router.push("/history") },
     { icon: "settings-outline" as const, label: "Configurações", onPress: () => router.push("/settings") },
@@ -89,68 +98,101 @@ export default function ProfileScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await loadUserData(); setRefreshing(false); }} tintColor="#EC4899" colors={["#EC4899"]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => { setRefreshing(true); await loadUserData(); setRefreshing(false); }}
+            tintColor="#EC4899"
+            colors={["#EC4899"]}
+          />
         }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            {/* Avatar */}
+        {/* Banner area */}
+        <View style={[styles.banner, { paddingTop: insets.top }]}>
+          <View style={styles.bannerInner} />
+        </View>
+
+        {/* Profile section */}
+        <View style={styles.profileSection}>
+          {/* Avatar row */}
+          <View style={styles.avatarRow}>
             <View style={styles.avatarWrapper}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{user.name?.charAt(0).toUpperCase()}</Text>
+                <Text style={styles.avatarText}>
+                  {user.name?.charAt(0).toUpperCase()}
+                </Text>
               </View>
               <View style={[styles.roleDot, isArtist ? styles.roleDotArtist : styles.roleDotContractor]} />
             </View>
 
-            {/* Edit button */}
-            <TouchableOpacity style={styles.editBtn} onPress={() => router.push("/edit-profile")}>
-              <Ionicons name="pencil-outline" size={14} color="#E4E4E7" />
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => router.push("/edit-profile")}
+              activeOpacity={0.7}
+            >
               <Text style={styles.editBtnText}>Editar perfil</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Name + role */}
+          {/* Name */}
           <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.role}>{isArtist ? "Artista" : "Contratante"}</Text>
+          <Text style={styles.roleLabel}>{isArtist ? "Artista" : "Contratante"}</Text>
 
           {/* Bio */}
           {user.descricao ? (
             <Text style={styles.bio}>{user.descricao}</Text>
           ) : (
-            <TouchableOpacity onPress={() => router.push("/edit-profile")}>
-              <Text style={styles.bioEmpty}>+ Adicionar bio</Text>
+            <TouchableOpacity onPress={() => router.push("/edit-profile")} activeOpacity={0.7}>
+              <Text style={styles.bioPlaceholder}>+ Adicionar bio</Text>
             </TouchableOpacity>
           )}
 
-          {/* Metadata (LinkedIn style) */}
+          {/* Meta info */}
           <View style={styles.metaList}>
             {(user.cidade || user.estado) && (
               <View style={styles.metaItem}>
-                <Ionicons name="location-outline" size={14} color="#71717A" />
-                <Text style={styles.metaText}>{[user.cidade, user.estado].filter(Boolean).join(", ")}</Text>
+                <Ionicons name="location-outline" size={13} color="#52525B" />
+                <Text style={styles.metaText}>
+                  {[user.cidade, user.estado].filter(Boolean).join(", ")}
+                </Text>
               </View>
             )}
             {isArtist && user.genero_musical && (
               <View style={styles.metaItem}>
-                <Ionicons name="musical-note-outline" size={14} color="#71717A" />
+                <Ionicons name="musical-note-outline" size={13} color="#52525B" />
                 <Text style={styles.metaText}>{user.genero_musical}</Text>
               </View>
             )}
-            <View style={styles.metaItem}>
-              <Ionicons name="mail-outline" size={14} color="#71717A" />
-              <Text style={styles.metaText}>{user.email}</Text>
-            </View>
             {user.telefone && (
               <View style={styles.metaItem}>
-                <Ionicons name="call-outline" size={14} color="#71717A" />
+                <Ionicons name="call-outline" size={13} color="#52525B" />
                 <Text style={styles.metaText}>{user.telefone}</Text>
               </View>
             )}
+            <View style={styles.metaItem}>
+              <Ionicons name="mail-outline" size={13} color="#52525B" />
+              <Text style={styles.metaText}>{user.email}</Text>
+            </View>
           </View>
 
+          {/* Social links */}
+          {socialLinks.length > 0 && (
+            <View style={styles.socialRow}>
+              {socialLinks.map((link) => (
+                <TouchableOpacity
+                  key={link.label}
+                  style={styles.socialBtn}
+                  onPress={() => Linking.openURL(link.url)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name={link.icon} size={16} color={link.color} />
+                  <Text style={[styles.socialBtnText, { color: link.color }]}>{link.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           {/* Stats */}
-          <View style={styles.stats}>
+          <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{stats.propostas}</Text>
               <Text style={styles.statLabel}>{isArtist ? "Propostas" : "Enviadas"}</Text>
@@ -167,7 +209,7 @@ export default function ProfileScreen() {
                   <Text style={styles.statNumber}>
                     {stats.mediaAvaliacoes > 0 ? Number(stats.mediaAvaliacoes).toFixed(1) : "—"}
                   </Text>
-                  <Text style={styles.statLabel}>Nota</Text>
+                  <Text style={styles.statLabel}>Nota média</Text>
                 </View>
               </>
             )}
@@ -177,23 +219,41 @@ export default function ProfileScreen() {
         <View style={styles.divider} />
 
         {/* Menu */}
-        {menuItems.map((item, i) => (
-          <TouchableOpacity key={item.label} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
-            <Ionicons name={item.icon} size={20} color="#A1A1AA" />
-            <Text style={styles.menuLabel}>{item.label}</Text>
-            <Ionicons name="chevron-forward" size={16} color="#3F3F46" />
-          </TouchableOpacity>
-        ))}
+        <View style={styles.menuSection}>
+          {menuItems.map((item, index) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[
+                styles.menuItem,
+                index < menuItems.length - 1 && styles.menuItemBorder,
+              ]}
+              onPress={item.onPress}
+              activeOpacity={0.6}
+            >
+              <View style={styles.menuIconWrap}>
+                <Ionicons name={item.icon} size={18} color="#71717A" />
+              </View>
+              <Text style={styles.menuLabel}>{item.label}</Text>
+              <Ionicons name="chevron-forward" size={15} color="#27272A" />
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <View style={styles.divider} />
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutItem} onPress={handleLogout} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-          <Text style={styles.logoutText}>Sair da conta</Text>
+        <TouchableOpacity
+          style={styles.logoutItem}
+          onPress={handleLogout}
+          activeOpacity={0.6}
+        >
+          <View style={[styles.menuIconWrap, styles.menuIconRed]}>
+            <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+          </View>
+          <Text style={styles.logoutLabel}>Sair da conta</Text>
         </TouchableOpacity>
 
-        <View style={{ height: 80 }} />
+        <View style={{ height: insets.bottom + 80 }} />
       </ScrollView>
     </View>
   );
@@ -207,89 +267,123 @@ const styles = StyleSheet.create({
   retryBtn: { backgroundColor: "#EC4899", paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
   retryBtnText: { color: "#FFF", fontWeight: "700" },
 
-  // Header
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 20,
+  // Banner
+  banner: {
+    backgroundColor: "#0A0A0A",
   },
-  headerTop: {
+  bannerInner: {
+    height: 90,
+    backgroundColor: "#111",
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#1A1A1A",
+  },
+
+  // Profile section
+  profileSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    marginTop: -20,
+  },
+  avatarRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "flex-end",
     marginBottom: 12,
   },
   avatarWrapper: { position: "relative" },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: "#EC4899",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 3,
     borderColor: "#000",
   },
-  avatarText: { color: "#FFF", fontSize: 28, fontWeight: "800" },
+  avatarText: { color: "#FFF", fontSize: 30, fontWeight: "800" },
   roleDot: {
     position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2,
+    bottom: 3,
+    right: 3,
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    borderWidth: 2.5,
     borderColor: "#000",
   },
   roleDotArtist: { backgroundColor: "#EC4899" },
   roleDotContractor: { backgroundColor: "#8B5CF6" },
   editBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
     borderWidth: 0.5,
     borderColor: "#3F3F46",
     borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 4,
   },
   editBtnText: { color: "#E4E4E7", fontSize: 13, fontWeight: "600" },
 
-  name: { color: "#FFF", fontSize: 20, fontWeight: "800", marginBottom: 2 },
-  role: { color: "#71717A", fontSize: 14, marginBottom: 10 },
-  bio: { color: "#A1A1AA", fontSize: 14, lineHeight: 21, marginBottom: 12 },
-  bioEmpty: { color: "#EC4899", fontSize: 14, marginBottom: 12 },
+  name: { color: "#FFF", fontSize: 21, fontWeight: "800", letterSpacing: -0.3, marginBottom: 2 },
+  roleLabel: { color: "#52525B", fontSize: 14, marginBottom: 10 },
+  bio: { color: "#A1A1AA", fontSize: 14, lineHeight: 22, marginBottom: 12 },
+  bioPlaceholder: { color: "#EC4899", fontSize: 14, marginBottom: 12 },
 
-  // Metadata
-  metaList: { gap: 6, marginBottom: 16 },
-  metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  metaText: { color: "#71717A", fontSize: 13 },
+  // Meta
+  metaList: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 14 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  metaText: { color: "#52525B", fontSize: 13 },
 
-  // Stats
-  stats: {
+  // Social
+  socialRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  socialBtn: {
     flexDirection: "row",
     alignItems: "center",
-    paddingTop: 16,
+    gap: 5,
+    borderWidth: 0.5,
+    borderColor: "#27272A",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  socialBtnText: { fontSize: 12, fontWeight: "600" },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 14,
     borderTopWidth: 0.5,
     borderTopColor: "#1A1A1A",
   },
-  statItem: { alignItems: "center", paddingHorizontal: 20 },
-  statNumber: { color: "#FFF", fontSize: 18, fontWeight: "800" },
-  statLabel: { color: "#52525B", fontSize: 11, marginTop: 2 },
-  statDivider: { width: 0.5, height: 28, backgroundColor: "#1A1A1A" },
+  statItem: { paddingRight: 24 },
+  statNumber: { color: "#FFF", fontSize: 17, fontWeight: "800" },
+  statLabel: { color: "#52525B", fontSize: 11, marginTop: 1 },
+  statDivider: { width: 0.5, height: 24, backgroundColor: "#1A1A1A", marginRight: 24 },
 
-  divider: { height: 0.5, backgroundColor: "#1A1A1A", marginVertical: 4 },
+  divider: { height: 8, backgroundColor: "#0A0A0A", borderTopWidth: 0.5, borderBottomWidth: 0.5, borderColor: "#1A1A1A" },
 
   // Menu
+  menuSection: { paddingHorizontal: 16 },
   menuItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  menuItemBorder: {
     borderBottomWidth: 0.5,
     borderBottomColor: "#111",
   },
+  menuIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#111",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuIconRed: { backgroundColor: "rgba(239,68,68,0.1)" },
   menuLabel: { flex: 1, color: "#E4E4E7", fontSize: 15 },
 
   // Logout
@@ -297,8 +391,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 14,
+    paddingVertical: 14,
+    gap: 12,
   },
-  logoutText: { color: "#EF4444", fontSize: 15 },
+  logoutLabel: { color: "#EF4444", fontSize: 15 },
 });
