@@ -56,18 +56,7 @@ export default function ArtistTabLayout() {
         }}
       />
 
-      {/* 4: Portfólio */}
-      <Tabs.Screen
-        name="portfolio"
-        options={{
-          href: "/(artist-tabs)/portfolio",
-          tabBarIcon: ({ color, focused }) => (
-            <TabIcon name={focused ? "images" : "images-outline"} color={color} focused={focused} />
-          ),
-        }}
-      />
-
-      {/* 5: Perfil */}
+      {/* 4: Perfil */}
       <Tabs.Screen
         name="profile"
         options={{

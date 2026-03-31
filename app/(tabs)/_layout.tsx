@@ -89,18 +89,8 @@ export default function TabLayout() {
         />
       )}
 
-      {/* 4: Portfólio (artista) | Propostas (contratante) */}
-      {isArtist ? (
-        <Tabs.Screen
-          name="portfolio"
-          options={{
-            href: "/(tabs)/portfolio",
-            tabBarIcon: ({ color, focused }) => (
-              <TabIcon name={focused ? "images" : "images-outline"} color={color} focused={focused} />
-            ),
-          }}
-        />
-      ) : (
+      {/* 4: Propostas (contratante) | hidden (artista) */}
+      {!isArtist && (
         <Tabs.Screen
           name="minhas-propostas"
           options={{
