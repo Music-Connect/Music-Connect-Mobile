@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   StatusBar,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import api from "@/services/api";
-
 import { Usuario } from "@/services/api";
 
 interface Proposal {
@@ -18,219 +20,176 @@ interface Proposal {
   titulo?: string;
   descricao?: string;
   valor_oferecido?: number;
-  valor?: string;
-  status: "pendente" | "aceita" | "rejeitada" | "concluida";
-  data_criacao?: string;
+  status: "pendente" | "aceita" | "rejeitada" | "recusada" | "concluida";
   data?: string;
   hora?: string;
-  contratante?: string;
-  id_contratante?: string;
-  id_artista?: string;
-  tipo_proposta?: "recebida" | "enviada";
+  local?: string;
+  tipo_evento?: string;
+  contratante_nome?: string;
+  artista_nome?: string;
 }
+
+const STATUS_FILTERS = ["Todas", "Pendentes", "Aceitas", "Recusadas", "Concluídas"];
+
+const STATUS_MAP: Record<string, string> = {
+  Pendentes: "pendente",
+  Aceitas: "aceita",
+  Recusadas: "recusada",
+  Concluídas: "concluida",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pendente: "Pendente",
+  aceita: "Aceita",
+  rejeitada: "Recusada",
+  recusada: "Recusada",
+  concluida: "Concluída",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  pendente: "#F59E0B",
+  aceita: "#22C55E",
+  rejeitada: "#EF4444",
+  recusada: "#EF4444",
+  concluida: "#3B82F6",
+};
 
 export default function MinhasPropostasScreen() {
   const router = useRouter();
-  const [proposals, setProposals] = useState<Proposal[]>([]);
+  const insets = useSafeAreaInsets();
+  const [all, setAll] = useState<Proposal[]>([]);
   const [user, setUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState("Todas");
+
+  const isArtist = user?.tipo_usuario === "artista";
+
+  useFocusEffect(
+    React.useCallback(() => { loadData(); }, []),
+  );
 
   const loadData = async () => {
     try {
-      // Check if user has token first
-      const hasToken = await api.hasToken();
-      if (!hasToken) {
-        router.replace("/login");
-        return;
-      }
-
       setLoading(true);
+      const userRes = await api.getMe();
+      if (!userRes) { router.replace("/login"); return; }
+      setUser(userRes);
 
-      const [userRes, proposalsRes] = await Promise.all([
-        api.getMe(),
-        api.getPropostasRecebidas(),
-      ]);
+      const proposalsRes = userRes.tipo_usuario === "artista"
+        ? await api.getPropostasRecebidas()
+        : await api.getPropostasEnviadas();
 
-      if (userRes) {
-        setUser(userRes);
-      }
-
-      if (proposalsRes.length >= 0) {
-        setProposals(proposalsRes as unknown as Proposal[]);
-      }
+      setAll(proposalsRes as unknown as Proposal[]);
     } catch (error) {
-      console.error("Erro ao carregar dados:", error);
-      if (error instanceof Error && error.message.includes("Token")) {
-        router.replace("/login");
-      }
+      console.error("Erro ao carregar propostas:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  useFocusEffect(
-    React.useCallback(() => {
-      const fetchData = async () => {
-        try {
-          // Check if user has token first
-          const hasToken = await api.hasToken();
-          if (!hasToken) {
-            router.replace("/login");
-            return;
-          }
-
-          setLoading(true);
-
-          const [userRes, proposalsRes] = await Promise.all([
-            api.getMe(),
-            api.getPropostasRecebidas(),
-          ]);
-
-          if (userRes) {
-            setUser(userRes);
-          }
-
-          if (proposalsRes.length >= 0) {
-            setProposals(proposalsRes as unknown as Proposal[]);
-          }
-        } catch (error) {
-          console.error("Erro ao carregar dados:", error);
-          if (error instanceof Error && error.message.includes("Token")) {
-            router.replace("/login");
-          }
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchData();
-    }, [router]),
-  );
-
-  const getStatusBadgeStyle = (status: string) => {
-    switch (status) {
-      case "aceita":
-        return styles.statusBadgeAccepted;
-      case "rejeitada":
-        return styles.statusBadgeRejected;
-      case "concluida":
-        return styles.statusBadgeCompleted;
-      default:
-        return styles.statusBadgePending;
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "aceita":
-        return "Aceita";
-      case "rejeitada":
-        return "Rejeitada";
-      case "concluida":
-        return "Concluída";
-      default:
-        return "Pendente";
-    }
-  };
-
-  const handleAcceptProposal = async (id: number) => {
+  const handleAccept = async (id: number) => {
     try {
       await api.atualizarStatusProposta(id, "aceita");
       loadData();
-    } catch (error) {
-      console.error("Erro ao aceitar proposta:", error);
-    }
+    } catch {}
   };
 
-  const handleRejectProposal = async (id: number) => {
+  const handleReject = async (id: number) => {
     try {
       await api.atualizarStatusProposta(id, "recusada");
       loadData();
-    } catch (error) {
-      console.error("Erro ao rejeitar proposta:", error);
-    }
+    } catch {}
   };
 
-  const renderProposalCard = ({ item }: { item: Proposal }) => {
+  const filtered = filter === "Todas"
+    ? all
+    : all.filter((p) => {
+        const mapped = STATUS_MAP[filter];
+        return p.status === mapped || (mapped === "recusada" && p.status === "rejeitada");
+      });
+
+  const renderItem = ({ item, index }: { item: Proposal; index: number }) => {
+    const statusColor = STATUS_COLOR[item.status] ?? "#52525B";
+    const statusLabel = STATUS_LABEL[item.status] ?? item.status;
     const isPending = item.status === "pendente";
-    const isArtist = user?.tipo_usuario === "artista";
+    const isLast = index === filtered.length - 1;
 
     return (
       <TouchableOpacity
-        style={styles.proposalCard}
+        style={[styles.row, !isLast && styles.rowBorder]}
         onPress={() => router.push(`/proposal/${item.id_proposta}`)}
+        activeOpacity={0.6}
       >
-        <View style={styles.proposalHeader}>
-          <View style={styles.proposalTitleContainer}>
-            <Text style={styles.proposalTitle}>
-              {item.titulo || "Sem título"}
-            </Text>
-            <View
-              style={[styles.statusBadge, getStatusBadgeStyle(item.status)]}
-            >
-              <Text style={styles.statusBadgeText}>
-                {getStatusText(item.status)}
-              </Text>
-            </View>
+        {/* Top: title + badge */}
+        <View style={styles.rowTop}>
+          <Text style={styles.rowTitle} numberOfLines={1}>{item.titulo || "Sem título"}</Text>
+          <View style={[styles.badge, { borderColor: statusColor }]}>
+            <Text style={[styles.badgeText, { color: statusColor }]}>{statusLabel}</Text>
           </View>
-          {item.valor_oferecido != null && (
-            <Text style={styles.proposalValue}>
-              R$ {Number(item.valor_oferecido).toFixed(2)}
-            </Text>
-          )}
         </View>
 
-        {item.descricao && (
-          <Text style={styles.proposalDescription} numberOfLines={2}>
-            {item.descricao}
+        {/* Value */}
+        {item.valor_oferecido != null && (
+          <Text style={styles.rowValue}>
+            R$ {Number(item.valor_oferecido).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </Text>
         )}
 
-        <View style={styles.proposalFooter}>
-          <View style={styles.proposalInfo}>
-            {item.data && (
-              <Text style={styles.proposalInfoText}>📅 {item.data}</Text>
-            )}
-            {item.hora && (
-              <Text style={styles.proposalInfoText}>🕐 {item.hora}</Text>
-            )}
-          </View>
+        {/* Description */}
+        {item.descricao ? (
+          <Text style={styles.rowDesc} numberOfLines={2}>{item.descricao}</Text>
+        ) : null}
 
-          {isPending && isArtist && (
-            <View style={styles.proposalActions}>
-              <TouchableOpacity
-                style={styles.rejectButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleRejectProposal(item.id_proposta);
-                }}
-              >
-                <Text style={styles.rejectButtonText}>Recusar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.acceptButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleAcceptProposal(item.id_proposta);
-                }}
-              >
-                <Text style={styles.acceptButtonText}>Aceitar</Text>
-              </TouchableOpacity>
+        {/* Meta */}
+        <View style={styles.meta}>
+          {item.data && (
+            <View style={styles.metaItem}>
+              <Ionicons name="calendar-outline" size={12} color="#52525B" />
+              <Text style={styles.metaText}>{item.data}{item.hora ? ` · ${item.hora}` : ""}</Text>
+            </View>
+          )}
+          {item.local && (
+            <View style={styles.metaItem}>
+              <Ionicons name="location-outline" size={12} color="#52525B" />
+              <Text style={styles.metaText}>{item.local}</Text>
+            </View>
+          )}
+          {(isArtist ? item.contratante_nome : item.artista_nome) && (
+            <View style={styles.metaItem}>
+              <Ionicons name="person-outline" size={12} color="#52525B" />
+              <Text style={styles.metaText}>{isArtist ? item.contratante_nome : item.artista_nome}</Text>
             </View>
           )}
         </View>
+
+        {/* Actions (artist, pending only) */}
+        {isArtist && isPending && (
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={styles.rejectBtn}
+              onPress={(e) => { e.stopPropagation(); handleReject(item.id_proposta); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.rejectBtnText}>Recusar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.acceptBtn}
+              onPress={(e) => { e.stopPropagation(); handleAccept(item.id_proposta); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.acceptBtnText}>Aceitar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
 
-  const countByStatus = (status: string) => {
-    return proposals.filter((p) => p.status === status).length;
-  };
-
-  if (loading) {
+  if (loading && all.length === 0) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>Carregando...</Text>
+      <View style={[styles.container, styles.center]}>
+        <Text style={styles.mutedText}>Carregando...</Text>
       </View>
     );
   }
@@ -239,345 +198,187 @@ export default function MinhasPropostasScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Banner */}
-        <View style={styles.banner}>
-          <View style={styles.bannerHeader}>
-            <View>
-              <Text style={styles.welcomeText}>Suas Propostas</Text>
-              <Text style={styles.userName}>{user?.name || "Usuário"}</Text>
-            </View>
-            <View style={styles.statusBadgeActive}>
-              <Text style={styles.statusBadgeActiveText}>ATIVO</Text>
-            </View>
-          </View>
-          <Text style={styles.userType}>
-            {user?.tipo_usuario === "contratante" ? "Contratante" : "Artista"}
-          </Text>
-        </View>
-
-        {/* Summary Cards */}
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryNumber}>{proposals.length}</Text>
-            <Text style={styles.summaryLabel}>Total</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryNumber}>
-              {countByStatus("pendente")}
-            </Text>
-            <Text style={styles.summaryLabel}>Pendentes</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryNumber}>{countByStatus("aceita")}</Text>
-            <Text style={styles.summaryLabel}>Aceitas</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryNumber}>
-              {countByStatus("concluida")}
-            </Text>
-            <Text style={styles.summaryLabel}>Concluídas</Text>
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.quickActionsContainer}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <Text style={styles.headerTitle}>
+          {isArtist ? "Propostas recebidas" : "Minhas propostas"}
+        </Text>
+        {!isArtist && (
           <TouchableOpacity
-            style={styles.quickActionButton}
+            style={styles.newBtn}
             onPress={() => router.push("/create-proposal")}
+            activeOpacity={0.7}
           >
-            <Text style={styles.quickActionButtonText}>+ Nova Proposta</Text>
+            <Ionicons name="add" size={16} color="#FFF" />
+            <Text style={styles.newBtnText}>Nova</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.quickActionButton,
-              styles.quickActionButtonSecondary,
-            ]}
-            onPress={() => router.push("/proposals-sent")}
-          >
-            <Text style={styles.quickActionButtonTextSecondary}>Ver Todas</Text>
-          </TouchableOpacity>
-        </View>
+        )}
+      </View>
 
-        {/* Proposals List */}
-        <View style={styles.proposalsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              {user?.tipo_usuario === "artista"
-                ? "Propostas Recebidas"
-                : "Propostas Enviadas"}
-            </Text>
-          </View>
-
-          {proposals.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                Nenhuma proposta encontrada
+      {/* Filter chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsRow}
+        style={styles.chipsScroll}
+      >
+        {STATUS_FILTERS.map((f) => {
+          const active = filter === f;
+          const count = f === "Todas"
+            ? all.length
+            : all.filter((p) => {
+                const mapped = STATUS_MAP[f];
+                return p.status === mapped || (mapped === "recusada" && p.status === "rejeitada");
+              }).length;
+          return (
+            <TouchableOpacity
+              key={f}
+              onPress={() => setFilter(f)}
+              style={[styles.chip, active && styles.chipActive]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                {f}{count > 0 ? ` ${count}` : ""}
               </Text>
-              <Text style={styles.emptyStateSubtext}>
-                {user?.tipo_usuario === "artista"
-                  ? "Você ainda não recebeu propostas"
-                  : "Comece criando uma nova proposta para artistas"}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={proposals}
-              renderItem={renderProposalCard}
-              keyExtractor={(item) => item.id_proposta.toString()}
-              scrollEnabled={false}
-            />
-          )}
-        </View>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
+
+      <View style={styles.divider} />
+
+      <FlatList
+        data={filtered}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id_proposta.toString()}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => { setRefreshing(true); await loadData(); setRefreshing(false); }}
+            tintColor="#EC4899"
+            colors={["#EC4899"]}
+          />
+        }
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.empty}>
+              <Ionicons name="document-text-outline" size={40} color="#3F3F46" />
+              <Text style={styles.emptyTitle}>Nenhuma proposta</Text>
+              <Text style={styles.emptyText}>
+                {filter !== "Todas" ? "Tente outro filtro" : isArtist
+                  ? "Você ainda não recebeu propostas"
+                  : "Crie sua primeira proposta"}
+              </Text>
+              {!isArtist && filter === "Todas" && (
+                <TouchableOpacity
+                  style={styles.emptyBtn}
+                  onPress={() => router.push("/create-proposal")}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.emptyBtnText}>Criar proposta</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null
+        }
+        contentContainerStyle={filtered.length === 0 ? { flex: 1 } : { paddingBottom: insets.bottom + 80 }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  centerContent: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    color: "#666",
-    fontSize: 16,
-  },
+  container: { flex: 1, backgroundColor: "#000" },
+  center: { justifyContent: "center", alignItems: "center" },
+  mutedText: { color: "#52525B", fontSize: 14 },
 
-  // Banner
-  banner: {
-    backgroundColor: "#1A1A1A",
-    padding: 24,
-    margin: 16,
-    borderRadius: 12,
-    marginTop: 60,
-  },
-  bannerHeader: {
+  // Header
+  header: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  welcomeText: {
-    color: "#999",
-    fontSize: 14,
-  },
-  userName: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-    marginTop: 4,
-  },
-  statusBadgeActive: {
-    backgroundColor: "#22C55E",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusBadgeActiveText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  userType: {
-    color: "#666",
-    fontSize: 14,
-  },
-
-  // Summary Cards
-  summaryContainer: {
-    flexDirection: "row",
     paddingHorizontal: 16,
-    gap: 8,
-    marginBottom: 16,
+    paddingBottom: 12,
   },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: "#1A1A1A",
-    padding: 16,
-    borderRadius: 12,
+  headerTitle: { color: "#FFF", fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
+  newBtn: {
+    flexDirection: "row",
     alignItems: "center",
-  },
-  summaryNumber: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  summaryLabel: {
-    color: "#666",
-    fontSize: 11,
-    marginTop: 4,
-  },
-
-  // Quick Actions
-  quickActionsContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 24,
-  },
-  quickActionButton: {
-    flex: 1,
+    gap: 4,
     backgroundColor: "#EC4899",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
   },
-  quickActionButtonSecondary: {
-    backgroundColor: "#1A1A1A",
-  },
-  quickActionButtonText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  quickActionButtonTextSecondary: {
-    color: "#EC4899",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
+  newBtnText: { color: "#FFF", fontSize: 13, fontWeight: "700" },
 
-  // Proposals Section
-  proposalsSection: {
-    paddingHorizontal: 16,
+  // Chips
+  chipsScroll: { flexGrow: 0 },
+  chipsRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    borderColor: "#2A2A2A",
+    backgroundColor: "#111",
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  seeAllButton: {
-    color: "#EC4899",
-    fontSize: 14,
-  },
+  chipActive: { backgroundColor: "#EC4899", borderColor: "#EC4899" },
+  chipText: { color: "#71717A", fontSize: 13, fontWeight: "500" },
+  chipTextActive: { color: "#FFF", fontWeight: "600" },
 
-  // Proposal Card
-  proposalCard: {
-    backgroundColor: "#1A1A1A",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  proposalHeader: {
-    marginBottom: 8,
-  },
-  proposalTitleContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  proposalTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    flex: 1,
-  },
-  statusBadge: {
+  divider: { height: 0.5, backgroundColor: "#1A1A1A" },
+
+  // Row
+  row: { paddingHorizontal: 16, paddingVertical: 14 },
+  rowBorder: { borderBottomWidth: 0.5, borderBottomColor: "#1A1A1A" },
+
+  rowTop: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  rowTitle: { flex: 1, color: "#FFF", fontSize: 15, fontWeight: "700" },
+
+  badge: {
+    borderWidth: 0.5,
+    borderRadius: 20,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginLeft: 8,
+    paddingVertical: 2,
   },
-  statusBadgePending: {
-    backgroundColor: "#FCD34D",
-  },
-  statusBadgeAccepted: {
-    backgroundColor: "#22C55E",
-  },
-  statusBadgeRejected: {
-    backgroundColor: "#EF4444",
-  },
-  statusBadgeCompleted: {
-    backgroundColor: "#3B82F6",
-  },
-  statusBadgeText: {
-    color: "#000",
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-  proposalValue: {
-    color: "#EC4899",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  proposalDescription: {
-    color: "#999",
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  proposalFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  proposalInfo: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  proposalInfoText: {
-    color: "#666",
-    fontSize: 12,
-  },
-  proposalActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  acceptButton: {
-    backgroundColor: "#22C55E",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  acceptButtonText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  rejectButton: {
-    backgroundColor: "#333",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  rejectButtonText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
+  badgeText: { fontSize: 11, fontWeight: "600" },
 
-  // Empty State
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 40,
-    backgroundColor: "#1A1A1A",
-    borderRadius: 12,
+  rowValue: { color: "#EC4899", fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  rowDesc: { color: "#71717A", fontSize: 13, lineHeight: 19, marginBottom: 8 },
+
+  meta: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 3 },
+  metaText: { color: "#52525B", fontSize: 12 },
+
+  // Actions
+  actions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  rejectBtn: {
+    borderWidth: 0.5,
+    borderColor: "#3F3F46",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
   },
-  emptyStateText: {
-    color: "#fff",
-    fontSize: 16,
-    marginBottom: 8,
+  rejectBtnText: { color: "#A1A1AA", fontSize: 13, fontWeight: "600" },
+  acceptBtn: {
+    backgroundColor: "#22C55E",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
   },
-  emptyStateSubtext: {
-    color: "#666",
-    fontSize: 14,
-    textAlign: "center",
+  acceptBtnText: { color: "#FFF", fontSize: 13, fontWeight: "600" },
+
+  // Empty
+  empty: { flex: 1, justifyContent: "center", alignItems: "center", gap: 8, paddingTop: 80 },
+  emptyTitle: { color: "#E4E4E7", fontSize: 15, fontWeight: "600" },
+  emptyText: { color: "#52525B", fontSize: 13 },
+  emptyBtn: {
+    marginTop: 8,
+    backgroundColor: "#EC4899",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
+  emptyBtnText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
 });
