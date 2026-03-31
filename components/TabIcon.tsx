@@ -1,18 +1,17 @@
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import { IconSymbol } from "@/components/ui/icon-symbol";
+import { Ionicons } from "@expo/vector-icons";
 
 interface TabIconProps {
-  name: string;
+  name: React.ComponentProps<typeof Ionicons>["name"];
   color: string;
-  size?: number;
   focused: boolean;
 }
 
-export default function TabIcon({ name, color, size = 24, focused }: TabIconProps) {
+export default function TabIcon({ name, color, focused }: TabIconProps) {
   return (
     <View style={styles.wrapper}>
-      <IconSymbol size={size} name={name} color={color} />
+      <Ionicons name={name} size={24} color={color} />
       {focused && <View style={styles.dot} />}
     </View>
   );

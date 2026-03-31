@@ -27,6 +27,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="social-feed"
       screenOptions={{
         tabBarActiveTintColor: "#EC4899",
         tabBarInactiveTintColor: "#555",
@@ -43,31 +44,36 @@ export default function TabLayout() {
         },
       }}
     >
+      {/* 1: Social Feed — principal */}
       <Tabs.Screen
         name="social-feed"
         options={{
           href: "/(tabs)/social-feed",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="newspaper.fill" color={color} focused={focused} />
+            <TabIcon name={focused ? "newspaper" : "newspaper-outline"} color={color} focused={focused} />
           ),
         }}
       />
+
+      {/* 2: Oportunidades / Home */}
       <Tabs.Screen
         name="index"
         options={{
           href: "/(tabs)",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="house.fill" color={color} focused={focused} />
+            <TabIcon name={focused ? "home" : "home-outline"} color={color} focused={focused} />
           ),
         }}
       />
+
+      {/* 3: Propostas (artista) | Explorar (contratante) */}
       {isArtist ? (
         <Tabs.Screen
           name="minhas-propostas"
           options={{
             href: "/(tabs)/minhas-propostas",
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name="envelope.open.fill" color={color} focused={focused} />
+              <TabIcon name={focused ? "mail-open" : "mail-open-outline"} color={color} focused={focused} />
             ),
           }}
         />
@@ -77,18 +83,20 @@ export default function TabLayout() {
           options={{
             href: "/(tabs)/explore",
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name="magnifyingglass" color={color} focused={focused} />
+              <TabIcon name={focused ? "search" : "search-outline"} color={color} focused={focused} />
             ),
           }}
         />
       )}
+
+      {/* 4: Portfólio (artista) | Propostas (contratante) */}
       {isArtist ? (
         <Tabs.Screen
           name="portfolio"
           options={{
             href: "/(tabs)/portfolio",
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name="film.fill" color={color} focused={focused} />
+              <TabIcon name={focused ? "images" : "images-outline"} color={color} focused={focused} />
             ),
           }}
         />
@@ -98,17 +106,19 @@ export default function TabLayout() {
           options={{
             href: "/(tabs)/minhas-propostas",
             tabBarIcon: ({ color, focused }) => (
-              <TabIcon name="doc.text.fill" color={color} focused={focused} />
+              <TabIcon name={focused ? "document-text" : "document-text-outline"} color={color} focused={focused} />
             ),
           }}
         />
       )}
+
+      {/* 5: Perfil */}
       <Tabs.Screen
         name="profile"
         options={{
           href: "/(tabs)/profile",
           tabBarIcon: ({ color, focused }) => (
-            <TabIcon name="person.fill" color={color} focused={focused} />
+            <TabIcon name={focused ? "person" : "person-outline"} color={color} focused={focused} />
           ),
         }}
       />
