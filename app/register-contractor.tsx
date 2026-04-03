@@ -13,6 +13,40 @@ import {
 import { useRouter } from "expo-router";
 import api from "../services/api";
 
+function getPasswordStrength(password: string): { level: number; label: string; color: string } {
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 8 && /[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password)) score++;
+  if (score === 0) return { level: 1, label: "Fraca", color: "#EF4444" };
+  if (score === 1) return { level: 2, label: "Média", color: "#F59E0B" };
+  return { level: 3, label: "Forte", color: "#22C55E" };
+}
+
+function PasswordStrength({ password }: { password: string }) {
+  const { level, label, color } = getPasswordStrength(password);
+  return (
+    <View style={strengthStyles.container}>
+      <View style={strengthStyles.bars}>
+        {[1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={[strengthStyles.bar, { backgroundColor: i <= level ? color : "#3F3F46" }]}
+          />
+        ))}
+      </View>
+      <Text style={[strengthStyles.label, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+const strengthStyles = StyleSheet.create({
+  container: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
+  bars: { flexDirection: "row", gap: 4, flex: 1 },
+  bar: { flex: 1, height: 4, borderRadius: 2 },
+  label: { fontSize: 12, fontWeight: "600", minWidth: 40, textAlign: "right" },
+});
+
 export default function RegisterContractorScreen() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -136,6 +170,9 @@ export default function RegisterContractorScreen() {
               onChangeText={(text) => handleChange("password", text)}
               secureTextEntry
             />
+            {form.password.length > 0 && (
+              <PasswordStrength password={form.password} />
+            )}
           </View>
 
           <View style={styles.inputGroup}>

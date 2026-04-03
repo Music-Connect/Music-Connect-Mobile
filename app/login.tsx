@@ -11,7 +11,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import api from "../services/api";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -20,6 +24,7 @@ export default function LoginScreen() {
     password: "",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const handleChange = (field: string, value: string) => {
     setFormLogin({ ...formLogin, [field]: value });
@@ -50,6 +55,28 @@ export default function LoginScreen() {
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    try {
+      const redirectUri = Linking.createURL("/");
+      const authUrl = `${api.getBaseUrl()}/api/auth/sign-in/social?provider=google&callbackURL=${encodeURIComponent(redirectUri)}`;
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+
+      if (result.type === "success") {
+        const user = await api.getSession();
+        if (user) {
+          router.replace("/redirect");
+        } else {
+          Alert.alert("Aviso", "Login com Google realizado. Por favor, entre novamente se a sessão não carregou.");
+        }
+      }
+    } catch {
+      Alert.alert("Erro", "Não foi possível conectar com o Google. Tente novamente.");
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
@@ -129,6 +156,21 @@ export default function LoginScreen() {
             <Text style={styles.dividerText}>ou</Text>
             <View style={styles.dividerLine} />
           </View>
+
+          <TouchableOpacity
+            style={[styles.googleButton, isGoogleLoading && styles.loginButtonDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={isGoogleLoading}
+          >
+            {isGoogleLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleButtonText}>Entrar com Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Não tem uma conta? </Text>
@@ -230,6 +272,28 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
+  },
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: "#18181B",
+    borderWidth: 1,
+    borderColor: "#3F3F46",
+    padding: 16,
+    borderRadius: 12,
+  },
+  googleIcon: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "900",
+    fontStyle: "italic",
+  },
+  googleButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   divider: {
     flexDirection: "row",

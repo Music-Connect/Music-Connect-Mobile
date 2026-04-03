@@ -597,6 +597,10 @@ async function getRecomendacoesArtistas(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function getBaseUrl(): string {
+  return API_BASE_URL;
+}
+
 async function isAuthenticated(): Promise<boolean> {
   const cookie = await getSessionCookie();
   if (!cookie) return false;
@@ -621,6 +625,8 @@ async function listarRecomendacoes(_filtros?: unknown): Promise<{ propostas: Pro
 }
 
 const mobileAPI = {
+  // config
+  getBaseUrl,
   // auth
   login,
   register,
