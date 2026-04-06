@@ -71,6 +71,9 @@ export interface Usuario {
 
 export interface Artista extends Usuario {
   tipo_usuario: "artista";
+  total_avaliacoes?: number | null;
+  media_avaliacoes?: number | null;
+  total_propostas_concluidas?: number | null;
 }
 
 export interface Proposta {

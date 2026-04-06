@@ -6,49 +6,69 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
-import api from "@/services/api";
+import api, { Artista } from "@/services/api";
 
 type TabType = "publicacoes" | "sobre" | "agenda";
 
 export default function PublicProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const artistId = Array.isArray(id) ? id[0] : id;
   const [activeTab, setActiveTab] = useState<TabType>("publicacoes");
   const [showModal, setShowModal] = useState(false);
-  const [artist, setArtist] = useState<any>(null);
+  const [artist, setArtist] = useState<Artista | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      if (id) {
-        loadArtist();
-      }
-    }, [id]),
-  );
+  const toSafeNumber = (value: unknown) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
 
-  const loadArtist = async () => {
+  const loadArtist = React.useCallback(async () => {
+    if (!artistId) {
+      setArtist(null);
+      setError("Artista não encontrado.");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      console.log("[ARTIST] Loading artist with ID:", id);
-      const response = await api.getArtista(id as string);
-      console.log("[ARTIST] Response:", JSON.stringify(response, null, 2));
+      setError(null);
+      const response = await api.getArtista(artistId);
 
       if (response) {
-        console.log("[ARTIST] Artist loaded:", response);
         setArtist(response);
       } else {
-        console.error("[ARTIST] Invalid response structure:", response);
+        setArtist(null);
+        setError("Não foi possível carregar os dados do artista.");
       }
     } catch (error) {
       console.error("[ARTIST] Error loading artist:", error);
+      setArtist(null);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Erro ao carregar os dados do artista.",
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [artistId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void loadArtist();
+    }, [loadArtist]),
+  );
 
   const handleSendProposal = () => {
+    if (!artist) return;
     router.push(`/create-proposal?id=${artist.id}`);
   };
 
@@ -62,8 +82,10 @@ export default function PublicProfileScreen() {
     </View>
   );
 
-  const renderSobre = () => {
-    const location = [artist.cidade, artist.estado].filter(Boolean).join(", ");
+  const renderSobre = (currentArtist: Artista) => {
+    const location = [currentArtist.cidade, currentArtist.estado]
+      .filter(Boolean)
+      .join(", ");
 
     return (
       <View style={styles.aboutSection}>
@@ -81,24 +103,24 @@ export default function PublicProfileScreen() {
             <Text style={styles.infoIcon}>💼</Text>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>TIPO</Text>
-              <Text style={styles.infoValue}>{artist.tipo_usuario}</Text>
+              <Text style={styles.infoValue}>{currentArtist.tipo_usuario}</Text>
             </View>
           </View>
-          {artist.genero_musical && (
+          {currentArtist.genero_musical && (
             <View style={styles.infoItem}>
               <Text style={styles.infoIcon}>🎵</Text>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>GÊNERO</Text>
-                <Text style={styles.infoValue}>{artist.genero_musical}</Text>
+                <Text style={styles.infoValue}>{currentArtist.genero_musical}</Text>
               </View>
             </View>
           )}
         </View>
 
-        {artist.descricao && (
+        {currentArtist.descricao && (
           <View style={styles.descriptionCard}>
             <Text style={styles.descriptionTitle}>Sobre</Text>
-            <Text style={styles.descriptionText}>{artist.descricao}</Text>
+            <Text style={styles.descriptionText}>{currentArtist.descricao}</Text>
           </View>
         )}
       </View>
@@ -120,7 +142,15 @@ export default function PublicProfileScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       {loading ? (
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#EC4899" />
           <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadArtist}>
+            <Text style={styles.retryButtonText}>Tentar novamente</Text>
+          </TouchableOpacity>
         </View>
       ) : !artist ? (
         <View style={styles.loadingContainer}>
@@ -166,26 +196,28 @@ export default function PublicProfileScreen() {
               <Text style={styles.artistBio}>{artist.descricao}</Text>
             )}
 
-            <View style={styles.stats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Seguidores</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Eventos</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>
-                  {artist.media_avaliacoes
-                    ? Number(artist.media_avaliacoes).toFixed(1)
-                    : "0.0"}
-                </Text>
-                <Text style={styles.statLabel}>
-                  Avaliação ({artist.total_avaliacoes || 0})
-                </Text>
-              </View>
-            </View>
+            {(() => {
+              const followers = toSafeNumber(artist.total_avaliacoes);
+              const events = toSafeNumber(artist.total_propostas_concluidas);
+              const ratingAverage = toSafeNumber(artist.media_avaliacoes).toFixed(1);
+
+              return (
+                <View style={styles.stats}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{followers}</Text>
+                    <Text style={styles.statLabel}>Seguidores</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{events}</Text>
+                    <Text style={styles.statLabel}>Eventos</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{ratingAverage}</Text>
+                    <Text style={styles.statLabel}>Avaliação ({followers})</Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             <TouchableOpacity
               style={styles.proposalButton}
@@ -244,7 +276,7 @@ export default function PublicProfileScreen() {
           {/* Tab Content */}
           <View style={styles.tabContent}>
             {activeTab === "publicacoes" && renderPublicacoes()}
-            {activeTab === "sobre" && renderSobre()}
+            {activeTab === "sobre" && renderSobre(artist)}
             {activeTab === "agenda" && renderAgenda()}
           </View>
         </ScrollView>
@@ -577,6 +609,27 @@ const styles = StyleSheet.create({
   loadingText: {
     color: "#fff",
     fontSize: 16,
+    marginTop: 12,
+  },
+  errorText: {
+    color: "#FCA5A5",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 16,
+    paddingHorizontal: 24,
+  },
+  retryButton: {
+    backgroundColor: "#27272A",
+    borderWidth: 1,
+    borderColor: "#3F3F46",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   modalOverlay: {
     position: "absolute",
