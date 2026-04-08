@@ -595,6 +595,46 @@ async function getRecomendacoesArtistas(
   return data.data ?? [];
 }
 
+// ─── Uploads ─────────────────────────────────────────────────────────────────
+
+async function uploadAvatar(imageUri: string): Promise<string> {
+  const cookie = await getSessionCookie();
+  if (!cookie) throw new Error("Sessão expirada. Faça login novamente.");
+
+  const filename = imageUri.split("/").pop() ?? "avatar.jpg";
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+  const mimeType =
+    ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
+  const formData = new FormData();
+  formData.append("file", {
+    uri: imageUri,
+    name: filename,
+    type: mimeType,
+  } as unknown as Blob);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/uploads`, {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: formData,
+    });
+  } catch {
+    throw new Error(
+      `Erro de rede. Verifique se o servidor está acessível em ${API_BASE_URL}`,
+    );
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.data.url as string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getBaseUrl(): string {
@@ -641,6 +681,7 @@ const mobileAPI = {
   getMe,
   getUsuario,
   updateProfile,
+  uploadAvatar,
   // artistas
   listarArtistas,
   getArtista,

@@ -7,8 +7,13 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Image,
+  ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import api from "@/services/api";
 import Header from "@/components/shared/Header";
 import Button from "@/components/shared/Button";
@@ -19,7 +24,10 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [userId, setUserId] = useState<string>("");
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
   const { form, handleChange, setForm } = useFormState({
     nome: "",
     email: "",
@@ -42,8 +50,9 @@ export default function EditProfileScreen() {
       if (response) {
         const user = response as any;
         setUserId(user.id || "");
+        setAvatarUri(user.image || null);
         setForm({
-          nome: user.nome || "",
+          nome: user.nome || user.name || "",
           email: user.email || "",
           telefone: user.telefone || "",
           local_atuacao:
@@ -61,6 +70,56 @@ export default function EditProfileScreen() {
     }
   };
 
+  const handleAlterarFoto = async () => {
+    // 1. Solicita permissão à galeria
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permissão negada",
+        "Precisamos de acesso à galeria para alterar sua foto. Vá em Configurações e conceda a permissão.",
+      );
+      return;
+    }
+
+    // 2. Abre a galeria
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const selectedUri = result.assets[0].uri;
+
+    try {
+      setUploadingAvatar(true);
+
+      // 3. Comprime: redimensiona para 800×800 e aplica JPEG 70%
+      const compressed = await ImageManipulator.manipulateAsync(
+        selectedUri,
+        [{ resize: { width: 800, height: 800 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+      );
+
+      // Preview local imediato enquanto faz upload
+      setAvatarUri(compressed.uri);
+
+      // 4. Envia para POST /api/uploads
+      const imageUrl = await api.uploadAvatar(compressed.uri);
+
+      // 5. Atualiza o perfil com a URL retornada
+      await api.updateProfile(userId, { image: imageUrl } as any);
+
+      Alert.alert("Sucesso", "Foto de perfil atualizada!");
+    } catch (err: any) {
+      Alert.alert("Erro", err?.message || "Falha ao atualizar a foto");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.nome || !form.email) {
       Alert.alert("Erro", "Preencha os campos obrigatórios");
@@ -69,20 +128,15 @@ export default function EditProfileScreen() {
 
     setLoading(true);
     try {
-      const response = await api.updateProfile(userId, {
+      await api.updateProfile(userId, {
         name: form.nome,
         email: form.email,
         telefone: form.telefone,
       } as any);
 
-      if (response) {
-        Alert.alert("Sucesso", "Perfil atualizado com sucesso!", [
-          {
-            text: "OK",
-            onPress: () => router.back(),
-          },
-        ]);
-      }
+      Alert.alert("Sucesso", "Perfil atualizado com sucesso!", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
     } catch {
       Alert.alert("Erro", "Falha ao atualizar perfil");
     } finally {
@@ -96,6 +150,7 @@ export default function EditProfileScreen() {
         <StatusBar barStyle="light-content" backgroundColor="#000" />
         <Header title="Editar Perfil" />
         <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#EC4899" />
           <Text style={styles.loadingText}>Carregando...</Text>
         </View>
       </View>
@@ -114,16 +169,46 @@ export default function EditProfileScreen() {
         {/* Avatar Section */}
         <Card style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {form.nome.substring(0, 2).toUpperCase()}
-              </Text>
+            <TouchableOpacity
+              onPress={handleAlterarFoto}
+              disabled={uploadingAvatar}
+              activeOpacity={0.8}
+              style={styles.avatarWrapper}
+            >
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarText}>
+                    {form.nome.substring(0, 2).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+
+              {/* Overlay de loading durante upload */}
+              {uploadingAvatar && (
+                <View style={styles.avatarOverlay}>
+                  <ActivityIndicator color="#fff" />
+                </View>
+              )}
+
+              {/* Badge de edição */}
+              {!uploadingAvatar && (
+                <View style={styles.avatarEditBadge}>
+                  <Text style={styles.avatarEditBadgeText}>✎</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.avatarInfo}>
+              <Text style={styles.avatarName}>{form.nome}</Text>
+              <Button
+                label={uploadingAvatar ? "Enviando..." : "Alterar Foto"}
+                variant="secondary"
+                onPress={handleAlterarFoto}
+                disabled={uploadingAvatar}
+              />
             </View>
-            <Button
-              label="Alterar Foto"
-              variant="secondary"
-              onPress={() => {}}
-            />
           </View>
         </Card>
 
@@ -148,6 +233,7 @@ export default function EditProfileScreen() {
               value={form.email}
               onChangeText={(text) => handleChange("email", text)}
               keyboardType="email-address"
+              autoCapitalize="none"
               placeholderTextColor="#666"
             />
           </View>
@@ -244,6 +330,16 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 120,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: "#999",
+  },
   avatarSection: {
     marginBottom: 20,
   },
@@ -252,18 +348,68 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
   },
-  avatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+  avatarWrapper: {
+    position: "relative",
+    width: 80,
+    height: 80,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "#EC4899",
+  },
+  avatarPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "#EC4899",
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: {
     color: "#fff",
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "700",
+  },
+  avatarOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#EC4899",
+    borderWidth: 2,
+    borderColor: "#18181B",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarEditBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  avatarInfo: {
+    flex: 1,
+    gap: 10,
+  },
+  avatarName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
   },
   formCard: {
     marginBottom: 20,
@@ -339,14 +485,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     borderTopWidth: 1,
     borderTopColor: "#18181B",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    fontSize: 14,
-    color: "#999",
   },
 });
