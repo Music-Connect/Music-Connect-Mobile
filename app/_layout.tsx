@@ -52,6 +52,7 @@ export default function RootLayout() {
         <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
         <Stack.Screen name="advanced-search" options={{ headerShown: false }} />
         <Stack.Screen name="create-post" options={{ headerShown: false }} />
+        <Stack.Screen name="create-story" options={{ headerShown: false }} />
         <Stack.Screen
           name="modal"
           options={{ presentation: "modal", title: "Modal" }}

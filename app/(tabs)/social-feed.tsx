@@ -6,8 +6,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  Alert,
-  TextInput,
   Modal,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -15,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import api, { Post, StoryGroup, Usuario } from "@/services/api";
 import PostCard from "@/components/PostCard";
 import StoryCarousel from "@/components/StoryCarousel";
+import StoryViewer from "@/components/StoryViewer";
 
 export default function SocialFeedScreen() {
   const router = useRouter();
@@ -27,9 +26,9 @@ export default function SocialFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Story creation
-  const [showStoryModal, setShowStoryModal] = useState(false);
-  const [storyUrl, setStoryUrl] = useState("");
+  // Story viewer
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerGroupIndex, setViewerGroupIndex] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -76,30 +75,21 @@ export default function SocialFeedScreen() {
     setPosts(posts.filter((p) => p.id !== id));
   };
 
-  const handleCreateStory = async () => {
-    if (!storyUrl.trim()) return;
-    try {
-      await api.createStory({ midia_url: storyUrl.trim() });
-      setStoryUrl("");
-      setShowStoryModal(false);
-      const newStories = await api.getStories().catch(() => []);
-      setStories(newStories);
-    } catch {
-      Alert.alert("Erro", "Erro ao criar story");
-    }
+  const handleOpenStory = (index: number) => {
+    setViewerGroupIndex(index);
+    setViewerOpen(true);
   };
 
-  const handleOpenStory = (index: number) => {
-    // For now, just mark as viewed - full viewer can be added later
-    const group = stories[index];
-    if (group) {
-      group.stories.forEach((s) => {
-        if (!s.visto) api.visualizarStory(s.id).catch(() => {});
-      });
-    }
-    Alert.alert(
-      group.user.name,
-      `${group.stories.length} story(ies)`,
+  /** Atualiza hasUnseen localmente sem re-fetch */
+  const handleStoryViewed = (groupIndex: number, storyId: string) => {
+    setStories((prev) =>
+      prev.map((group, gi) => {
+        if (gi !== groupIndex) return group;
+        const updated = group.stories.map((s) =>
+          s.id === storyId ? { ...s, visto: true } : s,
+        );
+        return { ...group, stories: updated, hasUnseen: updated.some((s) => !s.visto) };
+      }),
     );
   };
 
@@ -118,7 +108,7 @@ export default function SocialFeedScreen() {
         stories={stories}
         currentUserId={user?.id}
         onOpenStory={handleOpenStory}
-        onCreateStory={() => setShowStoryModal(true)}
+        onCreateStory={() => router.push("/create-story" as any)}
       />
 
       {/* Divider */}
@@ -197,39 +187,21 @@ export default function SocialFeedScreen() {
         <Ionicons name="create-outline" size={24} color="#FFF" />
       </TouchableOpacity>
 
-      {/* Story Modal */}
-      <Modal visible={showStoryModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Criar Story</Text>
-            <TextInput
-              value={storyUrl}
-              onChangeText={setStoryUrl}
-              placeholder="URL da imagem ou vídeo"
-              placeholderTextColor="#52525B"
-              style={styles.modalInput}
-            />
-            <Text style={styles.modalHint}>Expira automaticamente em 24 horas</Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowStoryModal(false);
-                  setStoryUrl("");
-                }}
-              >
-                <Text style={styles.cancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleCreateStory}
-                disabled={!storyUrl.trim()}
-                style={[styles.modalPublishBtn, !storyUrl.trim() && { opacity: 0.3 }]}
-              >
-                <Text style={styles.modalPublishText}>Publicar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+      {/* Story Viewer */}
+      <Modal
+        visible={viewerOpen}
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setViewerOpen(false)}
+      >
+        <StoryViewer
+          stories={stories}
+          initialGroupIndex={viewerGroupIndex}
+          onClose={() => setViewerOpen(false)}
+          onViewed={handleStoryViewed}
+        />
       </Modal>
+
     </View>
   );
 }
@@ -290,46 +262,4 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modalContent: {
-    width: "100%",
-    backgroundColor: "#18181B",
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "rgba(63,63,70,0.4)",
-  },
-  modalTitle: { color: "#FFF", fontSize: 16, fontWeight: "700", marginBottom: 16 },
-  modalInput: {
-    color: "#FFF",
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: "rgba(63,63,70,0.4)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: "rgba(39,39,42,0.3)",
-    marginBottom: 8,
-  },
-  modalHint: { color: "#52525B", fontSize: 10, marginBottom: 20 },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    alignItems: "center",
-    gap: 16,
-  },
-  cancelText: { color: "#A1A1AA", fontSize: 14, fontWeight: "600" },
-  modalPublishBtn: {
-    backgroundColor: "#FFF",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  modalPublishText: { color: "#000", fontSize: 13, fontWeight: "700" },
 });

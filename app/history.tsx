@@ -1,63 +1,118 @@
-import React, { useState } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
+  FlatList,
   StyleSheet,
+  TouchableOpacity,
   StatusBar,
   ScrollView,
-  TouchableOpacity,
-  FlatList,
+  RefreshControl,
   ActivityIndicator,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
-import api from "@/services/api";
-import Header from "@/components/shared/Header";
-import Card from "@/components/shared/Card";
-import Badge from "@/components/shared/Badge";
-import { getStatusLabel, formatDateShort } from "@/utils/proposalHelpers";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import api, { Proposta, Usuario } from "@/services/api";
 
-interface HistoryItem {
-  id: string;
-  titulo: string;
-  artista?: string;
-  contratante?: string;
-  data: string;
-  valor: string;
-  status: "pendente" | "aceita" | "recusada";
-  type: "enviada" | "recebida";
+const PAGE_SIZE = 20;
+
+type StatusFilter = "Todas" | "Aceitas" | "Recusadas" | "Concluídas";
+
+const STATUS_FILTERS: StatusFilter[] = ["Todas", "Aceitas", "Recusadas", "Concluídas"];
+
+const STATUS_MAP: Record<StatusFilter, string[]> = {
+  Todas: [],
+  Aceitas: ["aceita"],
+  Recusadas: ["recusada", "cancelada"],
+  Concluídas: ["concluida"],
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  pendente: "Pendente",
+  aceita: "Aceita",
+  recusada: "Recusada",
+  cancelada: "Cancelada",
+  concluida: "Concluída",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  pendente: "#F59E0B",
+  aceita: "#22C55E",
+  recusada: "#EF4444",
+  cancelada: "#EF4444",
+  concluida: "#3B82F6",
+};
+
+interface HistoryEntry extends Proposta {
+  _direction: "recebida" | "enviada";
 }
 
-type FilterType = "todos" | "aceita" | "recusada" | "pendente";
+function formatDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
 
 export default function HistoryScreen() {
-  const [filter, setFilter] = useState<FilterType>("todos");
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  const [allData, setAllData] = useState<HistoryEntry[]>([]);
+  const [user, setUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<StatusFilter>("Todas");
+  const [page, setPage] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const pageRef = useRef(1);
 
   useFocusEffect(
-    React.useCallback(() => {
-      loadHistory();
+    useCallback(() => {
+      loadData();
     }, []),
   );
 
-  const loadHistory = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const response = await api.getPropostasRecebidas();
-      if (response) {
-        const items = response.map((p: any) => ({
-          id: p.id_proposta,
-          titulo: p.descricao || "Proposta",
-          artista: p.tipo_proposta === "enviada" ? p.nome_outro : undefined,
-          contratante:
-            p.tipo_proposta === "recebida" ? p.nome_outro : undefined,
-          data: p.created_at,
-          valor: p.valor_oferecido ? `R$ ${p.valor_oferecido}` : "A combinar",
-          status: p.status,
-          type: p.tipo_proposta,
-        }));
-        setHistory(items);
-      }
+      const userRes = await api.getMe();
+      if (!userRes) { router.replace("/login"); return; }
+      setUser(userRes);
+
+      const isArtist = userRes.tipo_usuario === "artista";
+
+      // Fetch based on role — artists receive, contractors send
+      // Both roles see their full history from their perspective
+      const [received, sent] = await Promise.allSettled([
+        isArtist ? api.getPropostasRecebidas() : Promise.resolve([] as Proposta[]),
+        isArtist ? Promise.resolve([] as Proposta[]) : api.getPropostasEnviadas(),
+      ]);
+
+      const receivedList: HistoryEntry[] = (
+        received.status === "fulfilled" ? received.value : []
+      ).map((p) => ({ ...p, _direction: "recebida" as const }));
+
+      const sentList: HistoryEntry[] = (
+        sent.status === "fulfilled" ? sent.value : []
+      ).map((p) => ({ ...p, _direction: "enviada" as const }));
+
+      // Merge, deduplicate by id_proposta, sort newest first
+      const seen = new Set<number>();
+      const merged = [...receivedList, ...sentList]
+        .filter((p) => {
+          if (seen.has(p.id_proposta)) return false;
+          seen.add(p.id_proposta);
+          return true;
+        })
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setAllData(merged);
+      setPage(1);
+      pageRef.current = 1;
     } catch (error) {
       console.error("Erro ao carregar histórico:", error);
     } finally {
@@ -65,291 +120,276 @@ export default function HistoryScreen() {
     }
   };
 
-  const filteredHistory = history.filter((h) =>
-    filter === "todos" ? true : h.status === filter,
-  );
-
-  const stats = {
-    total: history.length,
-    aceita: history.filter((h) => h.status === "aceita").length,
-    recusada: history.filter((h) => h.status === "recusada").length,
-    pendente: history.filter((h) => h.status === "pendente").length,
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
   };
 
-  const renderItem = ({ item }: { item: HistoryItem }) => (
-    <TouchableOpacity style={styles.historyCard}>
-      <View style={styles.cardTop}>
-        <View style={styles.cardInfo}>
-          <Text style={styles.cardTitle}>{item.titulo}</Text>
-          <Text style={styles.cardSubtitle}>
-            {item.type === "enviada"
-              ? `Para: ${item.artista}`
-              : `De: ${item.contratante}`}
-          </Text>
-        </View>
-        <Badge
-          label={getStatusLabel(item.status as any)}
-          variant={
-            item.status === "aceita"
-              ? "success"
-              : item.status === "recusada"
-                ? "error"
-                : "warning"
-          }
-        />
-      </View>
+  const filtered = filter === "Todas"
+    ? allData
+    : allData.filter((p) => STATUS_MAP[filter].includes(p.status));
 
-      <View style={styles.cardBottom}>
-        <View style={styles.dateValue}>
-          <Text style={styles.dateLabel}>📅</Text>
-          <Text style={styles.dateText}>{formatDateShort(item.data)}</Text>
+  const displayed = filtered.slice(0, page * PAGE_SIZE);
+  const hasMore = displayed.length < filtered.length;
+
+  const handleEndReached = () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    const nextPage = pageRef.current + 1;
+    pageRef.current = nextPage;
+    setPage(nextPage);
+    setLoadingMore(false);
+  };
+
+  const countFor = (f: StatusFilter) =>
+    f === "Todas"
+      ? allData.length
+      : allData.filter((p) => STATUS_MAP[f].includes(p.status)).length;
+
+  const renderItem = ({ item, index }: { item: HistoryEntry; index: number }) => {
+    const statusColor = STATUS_COLOR[item.status] ?? "#52525B";
+    const statusLabel = STATUS_LABEL[item.status] ?? item.status;
+    const isLast = index === displayed.length - 1;
+    const isArtist = user?.tipo_usuario === "artista";
+    const otherPerson = isArtist
+      ? item.contratante?.name
+      : item.artista?.name;
+
+    return (
+      <TouchableOpacity
+        style={[styles.row, !isLast && styles.rowBorder]}
+        onPress={() => router.push(`/proposal/${item.id_proposta}`)}
+        activeOpacity={0.6}
+      >
+        {/* Top: title + badge */}
+        <View style={styles.rowTop}>
+          <Text style={styles.rowTitle} numberOfLines={1}>
+            {item.titulo || item.descricao?.slice(0, 40) || "Proposta"}
+          </Text>
+          <View style={[styles.badge, { borderColor: statusColor }]}>
+            <Text style={[styles.badgeText, { color: statusColor }]}>{statusLabel}</Text>
+          </View>
         </View>
-        <View style={styles.dateValue}>
-          <Text style={styles.dateLabel}>💰</Text>
-          <Text style={styles.valueText}>{item.valor}</Text>
+
+        {/* Value */}
+        {item.valor_oferecido != null && (
+          <Text style={styles.rowValue}>
+            R${" "}
+            {Number(item.valor_oferecido).toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+            })}
+          </Text>
+        )}
+
+        {/* Description */}
+        {item.descricao ? (
+          <Text style={styles.rowDesc} numberOfLines={2}>{item.descricao}</Text>
+        ) : null}
+
+        {/* Meta row */}
+        <View style={styles.meta}>
+          {item.data_evento && (
+            <View style={styles.metaItem}>
+              <Ionicons name="calendar-outline" size={11} color="#52525B" />
+              <Text style={styles.metaText}>
+                {formatDate(item.data_evento)}
+                {item.hora_evento ? ` · ${item.hora_evento}` : ""}
+              </Text>
+            </View>
+          )}
+          {item.local_evento && (
+            <View style={styles.metaItem}>
+              <Ionicons name="location-outline" size={11} color="#52525B" />
+              <Text style={styles.metaText}>{item.local_evento}</Text>
+            </View>
+          )}
+          {otherPerson && (
+            <View style={styles.metaItem}>
+              <Ionicons name="person-outline" size={11} color="#52525B" />
+              <Text style={styles.metaText}>{otherPerson}</Text>
+            </View>
+          )}
         </View>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading && allData.length === 0) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color="#EC4899" />
       </View>
-    </TouchableOpacity>
-  );
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
-      <Header title="Histórico de Propostas" />
+      <StatusBar barStyle="light-content" />
 
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="arrow-back" size={22} color="#FFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Histórico</Text>
+        <View style={styles.headerRight}>
+          <Text style={styles.headerCount}>{allData.length}</Text>
+        </View>
+      </View>
+
+      {/* Filter chips */}
       <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsRow}
+        style={styles.chipsScroll}
       >
-        {/* Stats */}
-        <View style={styles.statsGrid}>
-          <Card style={styles.statCard}>
-            <Text style={styles.statNumber}>{stats.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: "#10B981" }]}>
-              {stats.aceita}
-            </Text>
-            <Text style={styles.statLabel}>Aceitas</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: "#EF4444" }]}>
-              {stats.recusada}
-            </Text>
-            <Text style={styles.statLabel}>Recusadas</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: "#F59E0B" }]}>
-              {stats.pendente}
-            </Text>
-            <Text style={styles.statLabel}>Pendentes</Text>
-          </Card>
-        </View>
-
-        {/* Filters */}
-        <View style={styles.filterContainer}>
-          {(["todos", "aceita", "recusada", "pendente"] as FilterType[]).map(
-            (f) => (
-              <TouchableOpacity
-                key={f}
-                style={[
-                  styles.filterButton,
-                  filter === f && styles.filterButtonActive,
-                ]}
-                onPress={() => setFilter(f)}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    filter === f && styles.filterTextActive,
-                  ]}
-                >
-                  {f === "todos"
-                    ? "Todos"
-                    : f === "aceita"
-                      ? "✅ Aceitas"
-                      : f === "recusada"
-                        ? "❌ Recusadas"
-                        : "⏳ Pendentes"}
-                </Text>
-              </TouchableOpacity>
-            ),
-          )}
-        </View>
-
-        {/* History List */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FF6B35" />
-          </View>
-        ) : filteredHistory.length > 0 ? (
-          <View style={styles.listContainer}>
-            <Text style={styles.listTitle}>
-              {filteredHistory.length} proposta
-              {filteredHistory.length !== 1 ? "s" : ""}
-            </Text>
-            <FlatList
-              data={filteredHistory}
-              renderItem={renderItem}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-            />
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📭</Text>
-            <Text style={styles.emptyTitle}>Nenhuma proposta</Text>
-            <Text style={styles.emptyText}>
-              Você não tem propostas com este status
-            </Text>
-          </View>
-        )}
+        {STATUS_FILTERS.map((f) => {
+          const active = filter === f;
+          const count = countFor(f);
+          return (
+            <TouchableOpacity
+              key={f}
+              onPress={() => {
+                setFilter(f);
+                setPage(1);
+                pageRef.current = 1;
+              }}
+              style={[styles.chip, active && styles.chipActive]}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                {f}{count > 0 ? ` ${count}` : ""}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
+
+      <View style={styles.divider} />
+
+      <FlatList
+        data={displayed}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id_proposta.toString()}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#EC4899"
+            colors={["#EC4899"]}
+          />
+        }
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color="#EC4899" />
+            </View>
+          ) : hasMore ? (
+            <View style={styles.footerLoader}>
+              <Text style={styles.footerText}>{filtered.length - displayed.length} mais</Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.empty}>
+              <Ionicons name="time-outline" size={44} color="#3F3F46" />
+              <Text style={styles.emptyTitle}>Nenhuma proposta</Text>
+              <Text style={styles.emptyText}>
+                {filter !== "Todas"
+                  ? "Tente outro filtro"
+                  : "Seu histórico aparecerá aqui"}
+              </Text>
+            </View>
+          ) : null
+        }
+        contentContainerStyle={
+          displayed.length === 0 ? { flex: 1 } : { paddingBottom: insets.bottom + 20 }
+        }
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  statsGrid: {
+  container: { flex: 1, backgroundColor: "#000" },
+  center: { justifyContent: "center", alignItems: "center" },
+
+  // Header
+  header: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: "48%",
     alignItems: "center",
-    paddingVertical: 12,
-  },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#EC4899",
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: "#999",
-    fontWeight: "600",
-  },
-  filterContainer: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
-  filterButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#18181B",
-    borderWidth: 1,
-    borderColor: "#3F3F46",
-  },
-  filterButtonActive: {
-    backgroundColor: "#EC489920",
-    borderColor: "#EC4899",
-  },
-  filterText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-  },
-  filterTextActive: {
-    color: "#EC4899",
-  },
-  listContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
     gap: 12,
   },
-  listTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#fff",
-    marginBottom: 8,
+  headerTitle: {
+    flex: 1,
+    color: "#FFF",
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
   },
-  historyCard: {
+  headerRight: {
     backgroundColor: "#18181B",
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#3F3F46",
-    marginBottom: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
+  headerCount: { color: "#71717A", fontSize: 12, fontWeight: "600" },
+
+  // Chips
+  chipsScroll: { flexGrow: 0 },
+  chipsRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    borderColor: "#2A2A2A",
+    backgroundColor: "#111",
   },
-  cardInfo: {
-    flex: 1,
-    marginRight: 8,
+  chipActive: { backgroundColor: "#EC4899", borderColor: "#EC4899" },
+  chipText: { color: "#71717A", fontSize: 13, fontWeight: "500" },
+  chipTextActive: { color: "#FFF", fontWeight: "600" },
+
+  divider: { height: 0.5, backgroundColor: "#1A1A1A" },
+
+  // Row
+  row: { paddingHorizontal: 16, paddingVertical: 14 },
+  rowBorder: { borderBottomWidth: 0.5, borderBottomColor: "#1A1A1A" },
+
+  rowTop: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  rowTitle: { flex: 1, color: "#FFF", fontSize: 15, fontWeight: "700" },
+
+  badge: {
+    borderWidth: 0.5,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  cardTitle: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#fff",
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 11,
-    color: "#999",
-  },
-  cardBottom: {
-    flexDirection: "row",
-    gap: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#3F3F46",
-  },
-  dateValue: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  dateLabel: {
-    fontSize: 14,
-  },
-  dateText: {
-    fontSize: 11,
-    color: "#999",
-  },
-  valueText: {
-    fontSize: 11,
-    color: "#FCD34D",
-    fontWeight: "600",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 60,
-  },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-    marginBottom: 4,
-  },
-  emptyText: {
-    fontSize: 12,
-    color: "#999",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  badgeText: { fontSize: 11, fontWeight: "600" },
+
+  rowValue: { color: "#EC4899", fontSize: 15, fontWeight: "700", marginBottom: 4 },
+  rowDesc: { color: "#71717A", fontSize: 13, lineHeight: 19, marginBottom: 6 },
+
+  meta: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 2 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 3 },
+  metaText: { color: "#52525B", fontSize: 12 },
+
+  // Footer
+  footerLoader: { alignItems: "center", paddingVertical: 16 },
+  footerText: { color: "#52525B", fontSize: 12 },
+
+  // Empty
+  empty: { flex: 1, justifyContent: "center", alignItems: "center", gap: 8, paddingTop: 80 },
+  emptyTitle: { color: "#E4E4E7", fontSize: 15, fontWeight: "600" },
+  emptyText: { color: "#52525B", fontSize: 13 },
 });
