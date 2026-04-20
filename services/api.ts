@@ -25,6 +25,10 @@ const getDefaultBaseUrl = () => {
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || getDefaultBaseUrl();
 
+// Better Auth exige header Origin para proteção CSRF.
+// Apps nativos não enviam Origin automaticamente, então injetamos manualmente.
+const MOBILE_ORIGIN = process.env.EXPO_PUBLIC_APP_ORIGIN || "http://localhost:8081";
+
 const SESSION_COOKIE_KEY = "@music-connect:session-cookie";
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
@@ -141,6 +145,7 @@ async function request<T>(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
+    "Origin": MOBILE_ORIGIN,
     ...(options.headers as Record<string, string>),
   };
 
@@ -170,7 +175,7 @@ async function request<T>(
 async function login(payload: LoginPayload): Promise<{ user: Usuario }> {
   const response = await fetch(`${API_BASE_URL}/api/auth/sign-in/email`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Origin": MOBILE_ORIGIN },
     body: JSON.stringify({ email: payload.email, password: payload.password }),
   });
 
@@ -191,7 +196,7 @@ async function register(payload: RegisterPayload): Promise<{ user: Usuario }> {
 
   const response = await fetch(`${API_BASE_URL}/api/auth/sign-up/email`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Origin": MOBILE_ORIGIN },
     body: JSON.stringify({ email, password, name, tipo_usuario, ...extra }),
   });
 
@@ -212,7 +217,7 @@ async function logout(): Promise<void> {
   try {
     await fetch(`${API_BASE_URL}/api/auth/sign-out`, {
       method: "POST",
-      headers: cookie ? { Cookie: cookie } : {},
+      headers: { "Origin": MOBILE_ORIGIN, ...(cookie ? { Cookie: cookie } : {}) },
     });
   } finally {
     await clearSessionCookie();
@@ -222,7 +227,7 @@ async function logout(): Promise<void> {
 async function forgotPassword(email: string, redirectTo?: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/auth/forget-password`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Origin": MOBILE_ORIGIN },
     body: JSON.stringify({
       email,
       redirectTo: redirectTo || `${API_BASE_URL}/reset-password`,
@@ -238,7 +243,7 @@ async function forgotPassword(email: string, redirectTo?: string): Promise<void>
 async function resetPassword(token: string, newPassword: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Origin": MOBILE_ORIGIN },
     body: JSON.stringify({ token, newPassword }),
   });
 
@@ -254,7 +259,7 @@ async function getSession(): Promise<Usuario | null> {
 
   try {
     const response = await fetch(`${API_BASE_URL}/api/auth/get-session`, {
-      headers: { Cookie: cookie },
+      headers: { Cookie: cookie, "Origin": MOBILE_ORIGIN },
     });
     if (!response.ok) return null;
     const data = await response.json();
@@ -635,6 +640,45 @@ async function uploadAvatar(imageUri: string): Promise<string> {
   return data.data.url as string;
 }
 
+async function uploadStoryMedia(imageUri: string): Promise<string> {
+  const cookie = await getSessionCookie();
+  if (!cookie) throw new Error("Sessão expirada. Faça login novamente.");
+
+  const timestamp = Date.now();
+  const ext = imageUri.split(".").pop()?.toLowerCase() ?? "jpg";
+  const filename = `story_${timestamp}.${ext}`;
+  const mimeType =
+    ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
+  const formData = new FormData();
+  formData.append("file", {
+    uri: imageUri,
+    name: filename,
+    type: mimeType,
+  } as unknown as Blob);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/uploads`, {
+      method: "POST",
+      headers: { Cookie: cookie },
+      body: formData,
+    });
+  } catch {
+    throw new Error(
+      `Erro de rede. Verifique se o servidor está acessível em ${API_BASE_URL}`,
+    );
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.data.url as string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getBaseUrl(): string {
@@ -682,6 +726,7 @@ const mobileAPI = {
   getUsuario,
   updateProfile,
   uploadAvatar,
+  uploadStoryMedia,
   // artistas
   listarArtistas,
   getArtista,
