@@ -14,12 +14,16 @@ import { useRouter } from "expo-router";
 import api from "../services/api";
 
 function getPasswordStrength(password: string): { level: number; label: string; color: string } {
-  let score = 0;
-  if (password.length >= 6) score++;
-  if (password.length >= 8 && /[A-Z]/.test(password)) score++;
-  if (/[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password)) score++;
-  if (score === 0) return { level: 1, label: "Fraca", color: "#EF4444" };
-  if (score === 1) return { level: 2, label: "Média", color: "#F59E0B" };
+  if (!password) return { level: 0, label: "—", color: "#3F3F46" };
+  if (password.length < 8) return { level: 1, label: "Fraca", color: "#EF4444" };
+
+  let score = 1;
+  if (password.length >= 12) score++;
+  if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 2) return { level: 2, label: "Média", color: "#F59E0B" };
   return { level: 3, label: "Forte", color: "#22C55E" };
 }
 
@@ -74,8 +78,8 @@ export default function RegisterContractorScreen() {
       return;
     }
 
-    if (form.password.length < 6) {
-      Alert.alert("Erro", "A senha deve ter no mínimo 6 caracteres");
+    if (form.password.length < 8) {
+      Alert.alert("Erro", "A senha deve ter no mínimo 8 caracteres");
       return;
     }
 
