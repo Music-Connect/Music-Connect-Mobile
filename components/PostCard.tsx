@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Share,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -66,6 +67,25 @@ export default function PostCard({ post, currentUserId, onDelete, onComment }: P
       await api.deletePost(post.id);
       onDelete?.(post.id);
     } catch {}
+  };
+
+  const handleShare = async () => {
+    try {
+      const tipoLabel = tipo?.label ? `[${tipo.label}] ` : "";
+      const localLine = post.cidade
+        ? `📍 ${post.cidade}${post.estado ? `, ${post.estado}` : ""}\n\n`
+        : "";
+      const preview =
+        post.conteudo.length > 200
+          ? post.conteudo.slice(0, 200) + "…"
+          : post.conteudo;
+      await Share.share({
+        message: `🎵 ${tipoLabel}${post.autor.name} no Music Connect\n\n${preview}\n\n${localLine}Baixe o app para conferir.`,
+        title: `${post.autor.name} no Music Connect`,
+      });
+    } catch (error) {
+      console.error("Erro ao compartilhar post:", error);
+    }
   };
 
   return (
@@ -175,7 +195,7 @@ export default function PostCard({ post, currentUserId, onDelete, onComment }: P
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionBtn}>
+          <TouchableOpacity onPress={handleShare} style={styles.actionBtn}>
             <Ionicons name="arrow-redo-outline" size={18} color="#52525B" />
           </TouchableOpacity>
         </View>

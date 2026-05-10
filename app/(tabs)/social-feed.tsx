@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Modal,
+  ScrollView,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +15,17 @@ import api, { Post, StoryGroup, Usuario } from "@/services/api";
 import PostCard from "@/components/PostCard";
 import StoryCarousel from "@/components/StoryCarousel";
 import StoryViewer from "@/components/StoryViewer";
+import CommentsModal from "@/components/CommentsModal";
+
+type FeedMode = "recente" | "recomendado";
+type TipoFiltro = "todos" | "post" | "disponibilidade" | "buscando";
+
+const TIPO_CHIPS: { id: TipoFiltro; label: string }[] = [
+  { id: "todos", label: "Todos" },
+  { id: "post", label: "Publicações" },
+  { id: "disponibilidade", label: "Disponíveis" },
+  { id: "buscando", label: "Buscando" },
+];
 
 export default function SocialFeedScreen() {
   const router = useRouter();
@@ -26,22 +38,57 @@ export default function SocialFeedScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Filtros
+  const [modo, setModo] = useState<FeedMode>("recente");
+  const [tipoFiltro, setTipoFiltro] = useState<TipoFiltro>("todos");
+
   // Story viewer
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerGroupIndex, setViewerGroupIndex] = useState(0);
 
+  // Comments modal
+  const [commentsPostId, setCommentsPostId] = useState<string | null>(null);
+
+  // Carrega quando a tela entra em foco
   useFocusEffect(
     useCallback(() => {
       loadAll();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
+
+  // Re-fetch só dos posts quando filtros mudam (mantém stories/user em cache)
+  useEffect(() => {
+    if (loading) return; // primeira carga é feita pelo useFocusEffect
+    void loadPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modo, tipoFiltro]);
+
+  const fetchFeed = (params: { cursor?: string; limit: number }) => {
+    if (modo === "recomendado") {
+      return api.getFeedRecomendado(params);
+    }
+    return api.getFeed({
+      ...params,
+      tipo: tipoFiltro === "todos" ? undefined : tipoFiltro,
+    });
+  };
+
+  const loadPosts = async () => {
+    try {
+      const feedData = await fetchFeed({ limit: 15 });
+      setPosts(feedData.posts);
+      setCursor(feedData.meta.nextCursor);
+      setHasMore(feedData.meta.hasMore);
+    } catch {}
+  };
 
   const loadAll = async () => {
     setLoading(true);
     try {
       const [userData, feedData, storiesData] = await Promise.all([
         api.getMe(),
-        api.getFeed({ limit: 15 }),
+        fetchFeed({ limit: 15 }),
         api.getStories().catch(() => []),
       ]);
       setUser(userData);
@@ -63,7 +110,7 @@ export default function SocialFeedScreen() {
     if (!hasMore || loadingMore || !cursor) return;
     setLoadingMore(true);
     try {
-      const result = await api.getFeed({ cursor, limit: 15 });
+      const result = await fetchFeed({ cursor, limit: 15 });
       setPosts([...posts, ...result.posts]);
       setCursor(result.meta.nextCursor);
       setHasMore(result.meta.hasMore);
@@ -110,6 +157,48 @@ export default function SocialFeedScreen() {
         onOpenStory={handleOpenStory}
         onCreateStory={() => router.push("/create-story" as any)}
       />
+
+      {/* Toggle modo: Recente ↔ Recomendado */}
+      <View style={styles.modoToggle}>
+        {(["recente", "recomendado"] as FeedMode[]).map((m) => {
+          const active = modo === m;
+          return (
+            <TouchableOpacity
+              key={m}
+              onPress={() => setModo(m)}
+              style={[styles.modoButton, active && styles.modoButtonActive]}
+            >
+              <Text style={[styles.modoText, active && styles.modoTextActive]}>
+                {m === "recente" ? "Recentes" : "Para você"}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Chips de tipo — apenas no modo Recente (Recomendado não aceita tipo) */}
+      {modo === "recente" && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsRow}
+        >
+          {TIPO_CHIPS.map((chip) => {
+            const active = tipoFiltro === chip.id;
+            return (
+              <TouchableOpacity
+                key={chip.id}
+                onPress={() => setTipoFiltro(chip.id)}
+                style={[styles.chip, active && styles.chipActive]}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {chip.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Divider */}
       <View style={styles.divider} />
@@ -158,9 +247,7 @@ export default function SocialFeedScreen() {
             post={item}
             currentUserId={user?.id}
             onDelete={handleDeletePost}
-            onComment={() => {
-              // TODO: navigate to comment screen or open modal
-            }}
+            onComment={(p) => setCommentsPostId(p.id)}
           />
         )}
         ListHeaderComponent={renderHeader}
@@ -202,6 +289,23 @@ export default function SocialFeedScreen() {
         />
       </Modal>
 
+      {/* Comments Modal */}
+      <CommentsModal
+        visible={commentsPostId !== null}
+        postId={commentsPostId ?? ""}
+        currentUserId={user?.id}
+        onClose={() => setCommentsPostId(null)}
+        onCountChange={(delta) =>
+          setPosts((prev) =>
+            prev.map((p) =>
+              p.id === commentsPostId
+                ? { ...p, comentarios_count: Math.max(0, (p.comentarios_count ?? 0) + delta) }
+                : p,
+            ),
+          )
+        }
+      />
+
     </View>
   );
 }
@@ -226,6 +330,60 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(63,63,70,0.3)",
     marginHorizontal: 16,
     marginBottom: 12,
+  },
+  modoToggle: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 10,
+    backgroundColor: "#18181B",
+    borderRadius: 10,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: "#27272A",
+  },
+  modoButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  modoButtonActive: {
+    backgroundColor: "#27272A",
+  },
+  modoText: {
+    color: "#71717A",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  modoTextActive: {
+    color: "#EC4899",
+  },
+  chipsRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+    gap: 8,
+    flexDirection: "row",
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#27272A",
+    backgroundColor: "#18181B",
+  },
+  chipActive: {
+    backgroundColor: "rgba(236,72,153,0.15)",
+    borderColor: "#EC4899",
+  },
+  chipText: {
+    color: "#A1A1AA",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  chipTextActive: {
+    color: "#EC4899",
   },
   empty: {
     flex: 1,

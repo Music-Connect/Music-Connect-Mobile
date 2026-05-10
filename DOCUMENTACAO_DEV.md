@@ -689,8 +689,9 @@ Music-Connect-Mobile/
 │   └── (contractor-tabs)/        # Tabs específicos do contratante
 ├── components/
 │   ├── AppHeader.tsx             # Header com avatar, busca, notificações
-│   ├── PostCard.tsx              # Card de post (curtir, comentar, compartilhar)
+│   ├── PostCard.tsx              # Card de post (curtir, comentar, compartilhar via Share nativo)
 │   ├── FeedProposalCard.tsx      # Card de proposta no feed
+│   ├── CommentsModal.tsx         # Modal de comentários (paginação cursor + respostas aninhadas + soft delete)
 │   ├── StoryCarousel.tsx         # Carrossel de stories
 │   └── shared/
 │       ├── Button.tsx            # Botão (primary/secondary/danger/outline)
