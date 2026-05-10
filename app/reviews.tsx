@@ -15,6 +15,7 @@ import { useFocusEffect } from "expo-router";
 import Header from "@/components/shared/Header";
 import Card from "@/components/shared/Card";
 import Button from "@/components/shared/Button";
+import api from "@/services/api";
 
 interface Review {
   id: string;
@@ -44,10 +45,21 @@ export default function ReviewsScreen() {
   const loadReviews = async () => {
     try {
       setLoading(true);
-      // Placeholder - backend endpoint for reviews not yet implemented
-      setReviews([]);
+      const me = await api.getMe();
+      // Avaliacoes recebidas (onde eu sou o avaliado)
+      const recebidas = await api.getAvaliacoes(me.id);
+      const mapped: Review[] = (recebidas.avaliacoes ?? []).map((a) => ({
+        id: String(a.id_avaliacao),
+        author: a.avaliador?.name ?? "Anônimo",
+        rating: Number(a.nota) || 0,
+        text: a.comentario ?? "",
+        date: a.created_at,
+        type: "recebido",
+      }));
+      setReviews(mapped);
     } catch (error) {
       console.error("Erro ao carregar avaliações:", error);
+      setReviews([]);
     } finally {
       setLoading(false);
     }

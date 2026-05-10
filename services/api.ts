@@ -516,6 +516,22 @@ async function getFeedRecomendado(params?: {
   return { posts: data.data ?? [], meta: data.meta };
 }
 
+async function getPostsByUser(
+  userId: string,
+  params?: { cursor?: string; limit?: number },
+): Promise<{ posts: Post[]; meta: CursorMeta }> {
+  const qs = new URLSearchParams();
+  if (params?.cursor) qs.append("cursor", params.cursor);
+  if (params?.limit) qs.append("limit", String(params.limit));
+
+  const data = await request<{ data: Post[]; meta: CursorMeta }>(
+    `/api/posts/usuario/${userId}?${qs}`,
+    {},
+    false,
+  );
+  return { posts: data.data ?? [], meta: data.meta };
+}
+
 async function createPost(payload: {
   conteudo: string;
   tipo?: string;
@@ -773,6 +789,7 @@ const mobileAPI = {
   // feed / posts
   getFeed,
   getFeedRecomendado,
+  getPostsByUser,
   createPost,
   deletePost,
   curtirPost,

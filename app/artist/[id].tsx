@@ -18,6 +18,7 @@ export default function PublicProfileScreen() {
   const [activeTab, setActiveTab] = useState<TabType>("publicacoes");
   const [showModal, setShowModal] = useState(false);
   const [artist, setArtist] = useState<any>(null);
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(
@@ -31,15 +32,16 @@ export default function PublicProfileScreen() {
   const loadArtist = async () => {
     try {
       setLoading(true);
-      console.log("[ARTIST] Loading artist with ID:", id);
-      const response = await api.getArtista(id as string);
-      console.log("[ARTIST] Response:", JSON.stringify(response, null, 2));
+      const [artistResponse, postsResponse] = await Promise.all([
+        api.getArtista(id as string),
+        api.getPostsByUser(id as string, { limit: 30 }).catch(() => ({ posts: [], meta: { hasMore: false, nextCursor: null } })),
+      ]);
 
-      if (response) {
-        console.log("[ARTIST] Artist loaded:", response);
-        setArtist(response);
+      if (artistResponse) {
+        setArtist(artistResponse);
+        setPosts(postsResponse.posts ?? []);
       } else {
-        console.error("[ARTIST] Invalid response structure:", response);
+        console.error("[ARTIST] Invalid response structure:", artistResponse);
       }
     } catch (error) {
       console.error("[ARTIST] Error loading artist:", error);
@@ -52,15 +54,53 @@ export default function PublicProfileScreen() {
     router.push(`/create-proposal?id=${artist.id}`);
   };
 
-  const renderPublicacoes = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyStateIcon}>📝</Text>
-      <Text style={styles.emptyStateTitle}>Nenhuma publicação ainda</Text>
-      <Text style={styles.emptyStateDescription}>
-        Este artista ainda não possui publicações.
-      </Text>
-    </View>
-  );
+  const renderPublicacoes = () => {
+    if (posts.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateIcon}>📝</Text>
+          <Text style={styles.emptyStateTitle}>Nenhuma publicação ainda</Text>
+          <Text style={styles.emptyStateDescription}>
+            Este artista ainda não possui publicações.
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={{ gap: 12 }}>
+        {posts.map((post) => (
+          <View
+            key={post.id}
+            style={{
+              padding: 16,
+              backgroundColor: "#18181B",
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "#27272A",
+            }}
+          >
+            <Text style={{ color: "#9A9A9A", fontSize: 11, marginBottom: 8 }}>
+              {new Date(post.created_at).toLocaleDateString("pt-BR")}
+            </Text>
+            <Text style={{ color: "#fff", fontSize: 14, lineHeight: 20 }} numberOfLines={6}>
+              {post.conteudo}
+            </Text>
+            {(post.curtidas_count > 0 || post.comentarios_count > 0) && (
+              <View style={{ flexDirection: "row", gap: 16, marginTop: 12 }}>
+                <Text style={{ color: "#71717A", fontSize: 12 }}>
+                  ❤ {post.curtidas_count ?? 0}
+                </Text>
+                <Text style={{ color: "#71717A", fontSize: 12 }}>
+                  💬 {post.comentarios_count ?? 0}
+                </Text>
+              </View>
+            )}
+          </View>
+        ))}
+      </View>
+    );
+  };
 
   const renderSobre = () => {
     const location = [artist.cidade, artist.estado].filter(Boolean).join(", ");
@@ -168,12 +208,8 @@ export default function PublicProfileScreen() {
 
             <View style={styles.stats}>
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Seguidores</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Eventos</Text>
+                <Text style={styles.statValue}>{posts.length}</Text>
+                <Text style={styles.statLabel}>Publicações</Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>
@@ -184,6 +220,12 @@ export default function PublicProfileScreen() {
                 <Text style={styles.statLabel}>
                   Avaliação ({artist.total_avaliacoes || 0})
                 </Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={[styles.statValue, { fontSize: 14, color: "#71717A" }]}>
+                  Em breve
+                </Text>
+                <Text style={styles.statLabel}>Seguidores</Text>
               </View>
             </View>
 
