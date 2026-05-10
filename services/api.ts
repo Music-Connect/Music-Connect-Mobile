@@ -253,6 +253,35 @@ async function resetPassword(token: string, newPassword: string): Promise<void> 
   }
 }
 
+async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+  revokeOtherSessions = true
+): Promise<void> {
+  const cookie = await getSessionCookie();
+  if (!cookie) throw new Error("Sessão expirada. Faça login novamente.");
+
+  const response = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Origin": MOBILE_ORIGIN,
+      Cookie: cookie,
+    },
+    body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const raw = err.message || err.error || "";
+    const mensagens: Record<string, string> = {
+      "Invalid password": "Senha atual incorreta.",
+      "Password is too short": "A nova senha deve ter no mínimo 8 caracteres.",
+    };
+    throw new Error(mensagens[raw] ?? raw ?? "Erro ao alterar senha.");
+  }
+}
+
 async function getSession(): Promise<Usuario | null> {
   const cookie = await getSessionCookie();
   if (!cookie) return null;
@@ -717,6 +746,7 @@ const mobileAPI = {
   logout,
   forgotPassword,
   resetPassword,
+  changePassword,
   getSession,
   isAuthenticated,
   hasToken,

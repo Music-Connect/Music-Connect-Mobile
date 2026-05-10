@@ -29,6 +29,47 @@ export default function SettingsScreen() {
     local_atuacao: "",
   });
 
+  // Alterar senha
+  const [pwForm, setPwForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
+  });
+  const [pwSaving, setPwSaving] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!pwForm.currentPassword || !pwForm.newPassword) {
+      Alert.alert("Erro", "Preencha todos os campos.");
+      return;
+    }
+    if (pwForm.newPassword !== pwForm.confirmNewPassword) {
+      Alert.alert("Erro", "A nova senha e a confirmação não coincidem.");
+      return;
+    }
+    if (pwForm.newPassword.length < 8) {
+      Alert.alert("Erro", "A nova senha deve ter no mínimo 8 caracteres.");
+      return;
+    }
+    if (pwForm.currentPassword === pwForm.newPassword) {
+      Alert.alert("Erro", "A nova senha precisa ser diferente da atual.");
+      return;
+    }
+
+    setPwSaving(true);
+    try {
+      await api.changePassword(pwForm.currentPassword, pwForm.newPassword, true);
+      setPwForm({ currentPassword: "", newPassword: "", confirmNewPassword: "" });
+      Alert.alert("Sucesso", "Senha alterada. Outras sessões foram encerradas.");
+    } catch (error) {
+      Alert.alert(
+        "Erro",
+        error instanceof Error ? error.message : "Erro ao alterar senha."
+      );
+    } finally {
+      setPwSaving(false);
+    }
+  };
+
   useFocusEffect(
     React.useCallback(() => {
       loadUserData();
@@ -200,42 +241,68 @@ export default function SettingsScreen() {
   const renderSecurity = () => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Segurança</Text>
+        <Text style={styles.sectionTitle}>Alterar senha</Text>
       </View>
+
+      <Text
+        style={{
+          color: "#9A9A9A",
+          fontSize: 13,
+          marginHorizontal: 20,
+          marginBottom: 16,
+        }}
+      >
+        Por segurança, informe a senha atual. Após alterar, outras sessões serão encerradas.
+      </Text>
 
       <View style={styles.form}>
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Senha Atual</Text>
+          <Text style={styles.label}>Senha atual</Text>
           <TextInput
             style={styles.input}
             secureTextEntry
+            autoComplete="current-password"
             placeholder="Digite sua senha atual"
             placeholderTextColor="#666"
+            value={pwForm.currentPassword}
+            onChangeText={(v) => setPwForm({ ...pwForm, currentPassword: v })}
           />
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nova Senha</Text>
+          <Text style={styles.label}>Nova senha</Text>
           <TextInput
             style={styles.input}
             secureTextEntry
-            placeholder="Digite a nova senha"
+            autoComplete="new-password"
+            placeholder="Mínimo 8 caracteres"
             placeholderTextColor="#666"
+            value={pwForm.newPassword}
+            onChangeText={(v) => setPwForm({ ...pwForm, newPassword: v })}
           />
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Confirmar Nova Senha</Text>
+          <Text style={styles.label}>Confirmar nova senha</Text>
           <TextInput
             style={styles.input}
             secureTextEntry
+            autoComplete="new-password"
             placeholder="Confirme a nova senha"
             placeholderTextColor="#666"
+            value={pwForm.confirmNewPassword}
+            onChangeText={(v) => setPwForm({ ...pwForm, confirmNewPassword: v })}
           />
         </View>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleUpdate}>
-          <Text style={styles.saveButtonText}>Atualizar Senha</Text>
+        <TouchableOpacity
+          style={[styles.saveButton, pwSaving && { opacity: 0.5 }]}
+          onPress={handleChangePassword}
+          disabled={pwSaving}
+        >
+          <Text style={styles.saveButtonText}>
+            {pwSaving ? "Alterando..." : "Alterar senha"}
+          </Text>
         </TouchableOpacity>
       </View>
 
